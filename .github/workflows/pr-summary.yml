@@ -34,24 +34,26 @@ jobs:
               pull_number: prNumber,
             });
 
-            const summary = `## 📋 PR Summary
-
-            **Title:** ${pr.title}
-            **Author:** @${pr.user.login}
-            **State:** ${pr.state.toUpperCase()}
-            **Draft:** ${pr.draft ? 'Yes' : 'No'}
-
-            ### Changes
-            - **Commits:** ${commits.length}
-            - **Files Changed:** ${files.length}
-            - **Additions:** +${pr.additions}
-            - **Deletions:** -${pr.deletions}
-
-            ### Files Modified
-            ${files.slice(0, 10).map(f => `- \`${f.filename}\` (${f.changes} changes)`).join('\n')}
-            ${files.length > 10 ? `- ... and ${files.length - 10} more files` : ''}
-
-            ${pr.body ? `### Description\n${pr.body}` : ''}`;
+            const summary = [
+              '## 📋 PR Summary',
+              '',
+              `**Title:** ${pr.title}`,
+              `**Author:** @${pr.user.login}`,
+              `**State:** ${pr.state.toUpperCase()}`,
+              `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
+              '',
+              '### Changes',
+              `- **Commits:** ${commits.length}`,
+              `- **Files Changed:** ${files.length}`,
+              `- **Additions:** +${pr.additions}`,
+              `- **Deletions:** -${pr.deletions}`,
+              '',
+              '### Files Modified',
+              ...files.slice(0, 10).map(f => `- \`${f.filename}\` (${f.changes} changes)`),
+              files.length > 10 ? `- ... and ${files.length - 10} more files` : '',
+              '',
+              pr.body ? `### Description\n${pr.body}` : '',
+            ].filter(Boolean).join('\n');
 
             await github.rest.issues.createComment({
               issue_number: prNumber,
