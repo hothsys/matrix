@@ -280,7 +280,22 @@ function _refreshClustersNow() {
 function countryFlag(code) { return String.fromCodePoint(...[...code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)); }
 async function reverseGeocode(lat, lng) {
   const key = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
-  if (_geoCache[key]) return _geoCache[key];
+  // Map visual zoom → Nominatim zoom. Nominatim's zoom→detail mapping varies by
+  // country (Japan needs ≥10 for cities, Paris returns city at 8). Fixed breakpoints
+  // ensure results match what the user sees at each zoom range.
+  // Each entry: [minMapZoom, nominatimZoom, addressFieldPriority]
+  const ZOOM_TIERS = [
+    [14, 14, ['tourism','building','amenity','leisure','road','neighbourhood','suburb','village','town','city','county','state','province']],
+    [12, 12, ['suburb','neighbourhood','village','town','city','county','state','province']],
+    [ 9, 10, ['city','town','village','county','state','province']],
+    [ 0,  5, ['city','town','village','state','province','county']],
+  ];
+  const z = map ? map.getZoom() : 5;
+  const tier = ZOOM_TIERS.find(t => z >= t[0]);
+  const nomZoom = tier[1] || Math.round(z);
+  // Cache by lat/lng + nominatim zoom so different zoom levels get fresh results
+  const cacheKey = `${key}_z${nomZoom}`;
+  if (_geoCache[cacheKey]) return _geoCache[cacheKey];
   if (_isOffline) return null;
   // Rate-limit: ensure at least 1.1s between Nominatim calls
   const now = Date.now();
@@ -288,19 +303,6 @@ async function reverseGeocode(lat, lng) {
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   _lastNominatimCall = Date.now();
   try {
-    // Map visual zoom → Nominatim zoom. Nominatim's zoom→detail mapping varies by
-    // country (Japan needs ≥10 for cities, Paris returns city at 8). Fixed breakpoints
-    // ensure results match what the user sees at each zoom range.
-    // Each entry: [minMapZoom, nominatimZoom, addressFieldPriority]
-    const ZOOM_TIERS = [
-      [14, 14, ['tourism','building','amenity','leisure','road','neighbourhood','suburb','village','town','city','county','state','province']],
-      [12, 12, ['suburb','neighbourhood','village','town','city','county','state','province']],
-      [ 9, 10, ['city','town','village','county','state','province']],
-      [ 0,  5, ['city','town','village','state','province','county']],
-    ];
-    const z = map.getZoom();
-    const tier = ZOOM_TIERS.find(t => z >= t[0]);
-    const nomZoom = tier[1] || Math.round(z);
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=${nomZoom}&accept-language=en`);
     if (!r.ok) { console.warn('reverse geocode HTTP', r.status); return null; }
     const d = await r.json();
@@ -310,9 +312,10 @@ async function reverseGeocode(lat, lng) {
     // Avoid using d.name as fallback — it often duplicates the country name at low zoom
     const name = rawName || (d.name && d.name !== country ? d.name : null);
     const countryCode = a.country_code || null;
+    // Always update country/code caches (higher zoom = more accurate for border areas)
     if (country) _geoCountryCache[key] = country;
     if (countryCode) _geoCodeCache[key] = countryCode.toUpperCase();
-    if (name) { _geoCache[key] = name; return name; }
+    if (name) { _geoCache[cacheKey] = name; return name; }
   } catch(e) { console.warn('reverse geocode failed', e); }
   return null;
 }

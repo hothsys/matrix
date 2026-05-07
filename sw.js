@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v15';
+const CACHE_VERSION = 'matrix-v17';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -154,56 +154,51 @@ async function cacheFirst(request, cacheName) {
 const TRANSPARENT_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII='), c => c.charCodeAt(0));
 
 async function tileStrategy(request) {
-  // L1: browser Cache API (instant) — ignoreVary prevents misses from header differences
+  // L1: browser Cache API (instant)
   const cached = await caches.match(request, { ignoreVary: true });
   if (cached) return cached;
 
+  const proxyUrl = `http://localhost:${serverPort}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
+
   const cacheAndReturn = async (body, ct) => {
-    const cacheResp = new Response(body, { status: 200, headers: { 'Content-Type': ct } });
-    const cache = await caches.open(TILE_CACHE);
-    cache.put(request, cacheResp.clone());
-    evictOldTiles(cache);
-    return cacheResp;
+    try {
+      const cacheResp = new Response(body, { status: 200, headers: { 'Content-Type': ct } });
+      const cache = await caches.open(TILE_CACHE);
+      cache.put(request, cacheResp.clone());
+      evictOldTiles(cache);
+      return cacheResp;
+    } catch {
+      return new Response(body, { status: 200, headers: { 'Content-Type': ct } });
+    }
   };
 
-  // Online: skip disk proxy, fetch directly from origin (fast, no Python overhead)
-  // Offline: try disk cache first, then fail gracefully
-  if (navigator.onLine) {
-    try {
-      const oc = new AbortController();
-      const ot = setTimeout(() => oc.abort(), 8000);
-      const resp = await fetch(request, { signal: oc.signal });
-      clearTimeout(ot);
-      if (!resp.ok) throw new Error('origin error');
-      const body = await resp.arrayBuffer();
-      const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
-      // Save to disk cache in background (fire-and-forget) for offline use
-      const cacheUrl = `http://localhost:${serverPort}/api/tiles/cache?url=${encodeURIComponent(request.url)}`;
-      fetch(cacheUrl, { method: 'POST', body: body.slice(0) }).catch(() => {});
-      return cacheAndReturn(body, ct);
-    } catch {
-      // Origin failed while online — try disk as fallback
-    }
-  }
-
-  // Offline or origin failed: try disk cache (L2)
-  try {
-    const proxyUrl = `http://localhost:${serverPort}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1000);
-    const resp = await fetch(proxyUrl, { signal: controller.signal });
-    clearTimeout(timer);
-    if (resp.ok) {
-      const body = await resp.arrayBuffer();
-      const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
-      return cacheAndReturn(body, ct);
-    }
-  } catch {}
-
-  return new Response(TRANSPARENT_PNG, {
-    status: 200,
-    headers: { 'Content-Type': 'image/png' }
+  // Race L2 (disk) and L3 (origin) — whichever responds first wins
+  const diskCheck = fetch(proxyUrl).then(r => {
+    if (!r.ok) throw new Error('miss');
+    return r.arrayBuffer().then(body => ({ body, ct: r.headers.get('Content-Type') || 'application/octet-stream' }));
   });
+
+  const originFetch = fetch(request).then(r => {
+    if (!r.ok) throw new Error('origin error');
+    return r.arrayBuffer().then(body => {
+      const ct = r.headers.get('Content-Type') || 'application/octet-stream';
+      // Save to disk in background
+      fetch(`http://localhost:${serverPort}/api/tiles/cache?url=${encodeURIComponent(request.url)}`, {
+        method: 'POST', body: body.slice(0)
+      }).catch(() => {});
+      return { body, ct };
+    });
+  });
+
+  try {
+    const { body, ct } = await Promise.any([diskCheck, originFetch]);
+    return cacheAndReturn(body, ct);
+  } catch {
+    return new Response(TRANSPARENT_PNG, {
+      status: 200,
+      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }
+    });
+  }
 }
 
 function zoomFromUrl(url) {

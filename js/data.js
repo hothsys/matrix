@@ -502,6 +502,10 @@ async function init() {
   albums.push(...savedAlbums);
   rebuildPhotoMap();
   rebuildPhotoList(); buildTimeline(); rebuildAlbumList(); updateStats();
+  const dismissSpinner = () => {
+    const mapLoading = document.getElementById('map-loading');
+    if (mapLoading) { mapLoading.classList.add('done'); setTimeout(() => mapLoading.remove(), 400); }
+  };
   const ready = () => {
     buildClusterIndex();
     if (savedPhotos.length) {
@@ -509,14 +513,17 @@ async function init() {
       const realCount = savedPhotos.filter(p => !p.isEmptyPin).length;
       if (realCount) showToast(`Loaded ${realCount} photo${realCount!==1?'s':''}${savedAlbums.length?` and ${savedAlbums.length} album${savedAlbums.length!==1?'s':''}`:''}`,'success');
     }
+    dismissSpinner();
   };
   // Ensure map is truly ready — use 'idle' which fires after tiles + style are fully rendered
   const waitForMap = () => {
     if (map.loaded() && map.isStyleLoaded()) { ready(); }
     else { map.once('idle', ready); }
   };
-  if (map.isStyleLoaded()) waitForMap();
+  if (map.loaded() || map.isStyleLoaded()) waitForMap();
   else map.on('load', waitForMap);
+  // Safety net: force-remove spinner after 10s in case map never fires idle
+  setTimeout(dismissSpinner, 10000);
   // Check if serve.py is running and auto-restore if needed (non-blocking)
   checkAutoSaveServer().then(() => checkAutoRestore());
   // Backfill country codes from restored cache (non-blocking, no API calls)
@@ -628,7 +635,7 @@ async function getTileTemplates() {
 function fetchTile(url, timeoutMs = 8000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  return fetch(url, { mode: 'cors', signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
 // Build tile URLs for a set of locations at given zoom levels
@@ -686,22 +693,30 @@ async function cacheMapTiles() {
     const pinUrls = buildTileUrls(templates, locs, [4, 6, 8, 10, 12, 14], z => z >= 10 ? 2 : 1);
     tileUrls.push(...pinUrls);
 
+    // Skip tiles already in the SW cache
+    const cacheNames = await caches.keys();
+    const tileCacheName = cacheNames.find(n => n.endsWith('-tiles'));
+    const swCache = tileCacheName ? await caches.open(tileCacheName) : null;
+    const uncached = [];
+    for (const url of tileUrls) {
+      if (!swCache || !(await swCache.match(url))) uncached.push(url);
+    }
+    if (!uncached.length) return;
+
     // Fetch tiles — SW intercepts and caches via local server disk proxy
-    // Use small batches with delays to avoid starving interactive map rendering
+    // SW semaphores handle concurrency limiting
     let fetched = 0;
-    const BATCH = 2;
-    for (let i = 0; i < tileUrls.length; i += BATCH) {
+    const BATCH = 4;
+    for (let i = 0; i < uncached.length; i += BATCH) {
       if (_isOffline) break;
-      // Pause while map is busy or still loading tiles so interactive rendering gets priority
       while (_mapBusy || (map && !map.areTilesLoaded())) await new Promise(r => setTimeout(r, 500));
-      const batch = tileUrls.slice(i, i + BATCH);
+      const batch = uncached.slice(i, i + BATCH);
       await Promise.all(batch.map(url =>
         fetchTile(url).then(() => fetched++).catch(() => {})
       ));
-      // Yield between batches to keep connections free for interactive requests
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 100));
     }
-    if (fetched) console.log(`Tile cache: prefetched ${fetched} tiles (${tileUrls.length} total)`);
+    if (fetched) console.log(`Tile cache: prefetched ${fetched} tiles (${uncached.length} needed, ${tileUrls.length - uncached.length} already cached)`);
   } catch (e) { console.warn('Tile cache prefetch failed:', e); }
 }
 

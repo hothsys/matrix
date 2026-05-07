@@ -415,7 +415,7 @@ async function initMap() {
   // Pre-warm the other style into cache so the first switch is instant
   const otherUrl = styleUrl === STYLE_DARK ? STYLE_STREET : STYLE_DARK;
   fetch(otherUrl).then(r => r.json()).then(j => { _styleJsonCache[otherUrl] = j; }).catch(() => {});
-  map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, preserveDrawingBuffer:true });
+  map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, preserveDrawingBuffer:true, maxTileCacheSize:200 });
   map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
   // Recover from WebGL context loss (Safari loses context after sleep or memory pressure)
   const canvas = map.getCanvas();
@@ -482,8 +482,6 @@ async function initMap() {
     map.on('dataloading', () => { tileSpinner?.classList.add('active'); });
     map.on('idle', () => {
       tileSpinner?.classList.remove('active');
-      const mapLoading = document.getElementById('map-loading');
-      if (mapLoading) { mapLoading.classList.add('done'); setTimeout(() => mapLoading.remove(), 400); }
     });
   });
   map.on('movestart', () => { _mapBusy = true; });
@@ -511,6 +509,7 @@ async function initMap() {
       .addTo(map);
 
     let clickedLabel = null;
+    let labelCoords = null; // use feature's own coordinates for geocoding when a label is clicked
     if (isWater) {
       // On water: search a wider area for water name labels (the label text
       // may not be exactly at the click point)
@@ -532,13 +531,25 @@ async function initMap() {
         if (id === 'photo-pins-layer') continue;
         if (/^(road|highway|water|ferry|aeroway|boundary)/.test(id)) continue;
         const n = f.properties['name_en'] || f.properties['name:latin'] || f.properties['name'];
-        if (n) { clickedLabel = n; break; }
+        if (n) {
+          clickedLabel = n;
+          // Use the feature's actual coordinates for reverse geocode — the click
+          // point may be offset from the city center (e.g. Dubrovnik near Bosnia border)
+          const geom = f.geometry;
+          if (geom && geom.type === 'Point') {
+            labelCoords = { lng: geom.coordinates[0], lat: geom.coordinates[1] };
+          }
+          break;
+        }
       }
     }
 
-    // Reverse geocode (still needed for country/countryCode even if label was clicked)
-    const geoName = await reverseGeocode(lat, lng);
-    const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
+    // Reverse geocode using label's own coordinates when available (more accurate
+    // for border cities like Dubrovnik), otherwise fall back to click point
+    const geoLat = labelCoords ? labelCoords.lat : lat;
+    const geoLng = labelCoords ? labelCoords.lng : lng;
+    const geoName = await reverseGeocode(geoLat, geoLng);
+    const cacheKey = `${geoLat.toFixed(4)}_${geoLng.toFixed(4)}`;
     const placeName = clickedLabel || geoName || `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
     const country = _geoCountryCache[cacheKey] || '';
 

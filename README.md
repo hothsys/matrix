@@ -69,11 +69,13 @@ Map tiles are cached in three layers for fast, offline-capable rendering:
 | **L2 — Disk cache** | `matrix-tiles/` on disk (via `serve.py`) | Fast local read | Shared across all browsers | Persists until manually deleted |
 | **L3 — Origin fetch** | Remote tile server (OpenFreeMap / Esri) | Slowest | Requires internet | N/A |
 
-When MapLibre needs a tile, the style JSON provides the URL template (e.g., `.../planet/20260415_001001_pt/{z}/{x}/{y}.pbf`). The service worker intercepts the request and checks L1 (browser cache) first. On a miss, it asks `serve.py` if the tile exists on disk (L2). If the tile is on disk, it's served instantly. If not, the proxy returns 404 immediately and the service worker fetches directly from the origin (L3). After a successful origin fetch, the service worker sends the tile data back to `serve.py` in the background to be saved to disk for future use.
+On an L1 miss, the service worker checks L2 (disk proxy) first with a 50ms timeout. If the tile is on disk, it's served immediately with no origin request. If the disk check misses or times out, the service worker falls back to L3 (origin) with an 8-second timeout and one automatic retry on failure. Concurrency is limited by semaphores (4 concurrent disk, 6 concurrent origin) to prevent overwhelming either backend during rapid zoom transitions. After a successful origin fetch, the tile is saved to disk in the background for offline use.
 
 **URL-based versioning:** Tile URLs include a version segment (e.g., `20260415_001001_pt`) that changes when OpenFreeMap rebuilds their tile set. This means cached tiles are never stale — when tiles are updated, the style JSON points to new URLs, the cache naturally misses, and fresh tiles are fetched and cached. Old versioned tiles are eventually removed by LRU eviction.
 
-Tiles cached by one browser (e.g. Safari) are available to other browsers (e.g. Chrome) via the shared L2 disk cache. The disk cache is capped at 500 MB with LRU eviction — frequently accessed tiles have their timestamps updated on each read, so they stay in cache while rarely visited tiles are evicted first.
+The disk cache is capped at 500 MB with LRU eviction — when the limit is exceeded, the oldest tiles are removed down to 80% capacity. Eviction runs at startup and after each new tile is cached. Eviction events are logged to `matrix-requests.log`.
+
+**Proactive caching:** After app load, tiles for the world overview (z0–3) and pinned photo locations (z4–14) are prefetched in small batches. Already-cached tiles are skipped to avoid redundant network requests.
 
 ## Video Export
 
