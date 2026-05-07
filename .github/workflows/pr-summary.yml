@@ -34,6 +34,68 @@ jobs:
               pull_number: prNumber,
             });
 
+            // Analyze each file's patch to infer what changed
+            function analyzePatch(file) {
+              const patch = file.patch || '';
+              const ext = file.filename.split('.').pop();
+              const name = file.filename;
+              const lines = patch.split('\n');
+
+              if (file.status === 'added') return `\`${name}\` — new file (+${file.additions} lines)`;
+              if (file.status === 'removed') return `\`${name}\` — deleted`;
+              if (file.status === 'renamed') return `\`${name}\` — renamed from \`${file.previous_filename}\``;
+
+              const signals = [];
+
+              // Extract added function/class names
+              const addedFns = new Set();
+              const modifiedFns = new Set();
+              for (const line of lines) {
+                const fnMatch = line.match(/^\+\s*(?:function|async function|const|let|var)\s+([a-zA-Z_$][\w$]*)/);
+                if (fnMatch) addedFns.add(fnMatch[1]);
+                const pyMatch = line.match(/^\+\s*(?:def|class)\s+([a-zA-Z_][\w]*)/);
+                if (pyMatch) addedFns.add(pyMatch[1]);
+                // Hunk headers often contain the function context
+                const hunkMatch = line.match(/^@@.*@@\s*(?:function|def|class|async)?\s*([a-zA-Z_$][\w$]*)/);
+                if (hunkMatch) modifiedFns.add(hunkMatch[1]);
+              }
+
+              // Detect common patterns from added lines
+              const added = lines.filter(l => l.startsWith('+')).join(' ');
+              if (/\.addEventListener|\.on\(/.test(added)) signals.push('event handling');
+              if (/fetch\(|axios|XMLHttpRequest/.test(added)) signals.push('network/API calls');
+              if (/cache|Cache|localStorage|IndexedDB|dbPut/.test(added)) signals.push('caching/storage');
+              if (/try\s*{|catch\s*[({]|\.catch\(/.test(added)) signals.push('error handling');
+              if (/className|classList|style\.|css|CSS/.test(added) && ext !== 'css') signals.push('styling');
+              if (/console\.(log|warn|error|info)/.test(added)) signals.push('logging');
+              if (/test\(|expect\(|assert|describe\(/.test(added)) signals.push('tests');
+
+              // CSS-specific analysis
+              if (ext === 'css') {
+                const props = new Set();
+                for (const line of lines) {
+                  if (!line.startsWith('+')) continue;
+                  const m = line.match(/([a-z-]+)\s*:/);
+                  if (m && !m[1].startsWith('-')) props.add(m[1]);
+                }
+                if (props.size) signals.push(`CSS: ${[...props].slice(0, 5).join(', ')}`);
+              }
+
+              // Build description
+              const parts = [];
+              if (addedFns.size) parts.push(`added ${[...addedFns].slice(0, 3).join(', ')}${addedFns.size > 3 ? ` +${addedFns.size - 3} more` : ''}`);
+              if (modifiedFns.size) {
+                const modOnly = [...modifiedFns].filter(f => !addedFns.has(f));
+                if (modOnly.length) parts.push(`modified ${modOnly.slice(0, 3).join(', ')}${modOnly.length > 3 ? ` +${modOnly.length - 3} more` : ''}`);
+              }
+              if (signals.length) parts.push(signals.slice(0, 3).join(', '));
+              if (!parts.length) parts.push(`+${file.additions}/-${file.deletions}`);
+
+              return `\`${name}\` — ${parts.join('; ')}`;
+            }
+
+            const fileDescriptions = files.slice(0, 15).map(analyzePatch);
+
             const summary = [
               '## 📋 PR Summary',
               '',
@@ -49,8 +111,8 @@ jobs:
               `- **Deletions:** -${pr.deletions}`,
               '',
               '### Files Modified',
-              ...files.slice(0, 10).map(f => `- \`${f.filename}\` (${f.changes} changes)`),
-              files.length > 10 ? `- ... and ${files.length - 10} more files` : '',
+              ...fileDescriptions,
+              files.length > 15 ? `- ... and ${files.length - 15} more files` : '',
               '',
               pr.body ? `### Description\n${pr.body}` : '',
             ].filter(Boolean).join('\n');
