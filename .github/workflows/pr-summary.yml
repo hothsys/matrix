@@ -34,88 +34,97 @@ jobs:
               pull_number: prNumber,
             });
 
-            // Analyze each file's patch to infer what changed
-            function analyzePatch(file) {
+            // Analyze a file's patch to produce a one-line description
+            function describeFile(file) {
               const patch = file.patch || '';
               const ext = file.filename.split('.').pop();
-              const name = file.filename;
               const lines = patch.split('\n');
 
-              if (file.status === 'added') return `\`${name}\` — new file (+${file.additions} lines)`;
-              if (file.status === 'removed') return `\`${name}\` — deleted`;
-              if (file.status === 'renamed') return `\`${name}\` — renamed from \`${file.previous_filename}\``;
+              if (file.status === 'added') return `New file (+${file.additions} lines)`;
+              if (file.status === 'removed') return `Deleted`;
+              if (file.status === 'renamed') return `Renamed from \`${file.previous_filename}\``;
 
-              const signals = [];
-
-              // Extract added function/class names
-              const addedFns = new Set();
-              const modifiedFns = new Set();
+              // Extract function/method names from hunk headers (the @@ lines)
+              // These show which functions were actually modified
+              const touchedFns = [];
               for (const line of lines) {
-                const fnMatch = line.match(/^\+\s*(?:function|async function|const|let|var)\s+([a-zA-Z_$][\w$]*)/);
-                if (fnMatch) addedFns.add(fnMatch[1]);
-                const pyMatch = line.match(/^\+\s*(?:def|class)\s+([a-zA-Z_][\w]*)/);
-                if (pyMatch) addedFns.add(pyMatch[1]);
-                // Hunk headers often contain the function context
-                const hunkMatch = line.match(/^@@.*@@\s*(?:function|def|class|async)?\s*([a-zA-Z_$][\w$]*)/);
-                if (hunkMatch) modifiedFns.add(hunkMatch[1]);
+                const m = line.match(/^@@.*@@\s*(?:(?:async\s+)?function\s+|(?:def|class)\s+)([a-zA-Z_$][\w$]*)/);
+                if (m && !touchedFns.includes(m[1])) touchedFns.push(m[1]);
               }
 
-              // Detect common patterns from added lines
-              const added = lines.filter(l => l.startsWith('+')).join(' ');
-              if (/\.addEventListener|\.on\(/.test(added)) signals.push('event handling');
-              if (/fetch\(|axios|XMLHttpRequest/.test(added)) signals.push('network/API calls');
-              if (/cache|Cache|localStorage|IndexedDB|dbPut/.test(added)) signals.push('caching/storage');
-              if (/try\s*{|catch\s*[({]|\.catch\(/.test(added)) signals.push('error handling');
-              if (/className|classList|style\.|css|CSS/.test(added) && ext !== 'css') signals.push('styling');
-              if (/console\.(log|warn|error|info)/.test(added)) signals.push('logging');
-              if (/test\(|expect\(|assert|describe\(/.test(added)) signals.push('tests');
+              // Extract newly added function/method declarations
+              const newFns = [];
+              for (const line of lines) {
+                const m = line.match(/^\+\s*(?:(?:async\s+)?function\s+)([a-zA-Z_$][\w$]*)/);
+                if (m && !newFns.includes(m[1])) newFns.push(m[1]);
+                const py = line.match(/^\+\s*(?:def|class)\s+([a-zA-Z_][\w]*)/);
+                if (py && !newFns.includes(py[1])) newFns.push(py[1]);
+              }
 
-              // CSS-specific analysis
+              // For CSS files, describe what changed
               if (ext === 'css') {
-                const props = new Set();
+                const selectors = new Set();
                 for (const line of lines) {
                   if (!line.startsWith('+')) continue;
-                  const m = line.match(/([a-z-]+)\s*:/);
-                  if (m && !m[1].startsWith('-')) props.add(m[1]);
+                  const m = line.match(/^[+]\s*([.#][a-zA-Z][\w-]*|[a-z]+(?:\s*[>,+~]\s*[a-z]+)*)\s*\{/);
+                  if (m) selectors.add(m[1]);
                 }
-                if (props.size) signals.push(`CSS: ${[...props].slice(0, 5).join(', ')}`);
+                if (selectors.size) return `Updated ${[...selectors].slice(0, 4).join(', ')}${selectors.size > 4 ? ' +more' : ''}`;
+                return `Style updates (+${file.additions}/-${file.deletions})`;
               }
 
-              // Build description
+              // For markdown/text, just show line counts
+              if (['md', 'txt', 'json'].includes(ext)) return `Updated (+${file.additions}/-${file.deletions})`;
+
+              // Build description from functions
               const parts = [];
-              if (addedFns.size) parts.push(`added ${[...addedFns].slice(0, 3).join(', ')}${addedFns.size > 3 ? ` +${addedFns.size - 3} more` : ''}`);
-              if (modifiedFns.size) {
-                const modOnly = [...modifiedFns].filter(f => !addedFns.has(f));
-                if (modOnly.length) parts.push(`modified ${modOnly.slice(0, 3).join(', ')}${modOnly.length > 3 ? ` +${modOnly.length - 3} more` : ''}`);
-              }
-              if (signals.length) parts.push(signals.slice(0, 3).join(', '));
-              if (!parts.length) parts.push(`+${file.additions}/-${file.deletions}`);
-
-              return `\`${name}\` — ${parts.join('; ')}`;
+              if (newFns.length) parts.push(`New: ${newFns.slice(0, 3).join(', ')}${newFns.length > 3 ? ' +' + (newFns.length - 3) + ' more' : ''}`);
+              const modOnly = touchedFns.filter(f => !newFns.includes(f));
+              if (modOnly.length) parts.push(`Modified: ${modOnly.slice(0, 4).join(', ')}${modOnly.length > 4 ? ' +' + (modOnly.length - 4) + ' more' : ''}`);
+              if (parts.length) return parts.join('. ');
+              return `+${file.additions}/-${file.deletions}`;
             }
 
-            const fileDescriptions = files.slice(0, 15).map(analyzePatch);
+            // Group files by directory for the summary
+            const groups = {};
+            for (const f of files) {
+              const dir = f.filename.includes('/') ? f.filename.split('/').slice(0, -1).join('/') : '.';
+              if (!groups[dir]) groups[dir] = [];
+              groups[dir].push(f);
+            }
+
+            const fileLines = [];
+            for (const [dir, dirFiles] of Object.entries(groups)) {
+              if (Object.keys(groups).length > 1) fileLines.push(`**${dir || 'root'}/**`);
+              for (const f of dirFiles.slice(0, 15)) {
+                const basename = f.filename.split('/').pop();
+                fileLines.push(`- \`${basename}\` — ${describeFile(f)}`);
+              }
+            }
+
+            // Generate a high-level summary from commit messages
+            const commitMsgs = commits
+              .map(c => c.commit.message.split('\n')[0].trim())
+              .filter(m => m && !m.startsWith('Merge'));
+            const commitSection = commitMsgs.length
+              ? ['### Commits', ...commitMsgs.map(m => `- ${m}`)]
+              : [];
 
             const summary = [
               '## 📋 PR Summary',
               '',
               `**Title:** ${pr.title}`,
               `**Author:** @${pr.user.login}`,
-              `**State:** ${pr.state.toUpperCase()}`,
               `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
               '',
-              '### Changes',
-              `- **Commits:** ${commits.length}`,
-              `- **Files Changed:** ${files.length}`,
-              `- **Additions:** +${pr.additions}`,
-              `- **Deletions:** -${pr.deletions}`,
+              `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
               '',
-              '### Files Modified',
-              ...fileDescriptions,
+              ...commitSection,
+              commitSection.length ? '' : null,
+              '### Files',
+              ...fileLines,
               files.length > 15 ? `- ... and ${files.length - 15} more files` : '',
-              '',
-              pr.body ? `### Description\n${pr.body}` : '',
-            ].filter(Boolean).join('\n');
+            ].filter(v => v !== null && v !== false && v !== undefined && v !== '').join('\n');
 
             await github.rest.issues.createComment({
               issue_number: prNumber,
