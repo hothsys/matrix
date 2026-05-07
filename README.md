@@ -138,4 +138,4 @@ Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/N
 
 ---
 
-Built with [Claude Code](https://claude.ai/claude-code) using Claude Opus 4.6  
+Built with [Claude Code](https://claude.ai/claude-code) using Claude Opus 4.6 
