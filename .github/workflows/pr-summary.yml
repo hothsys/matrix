@@ -75,9 +75,13 @@ jobs:
               if (aiResp.ok) {
                 const aiData = await aiResp.json();
                 aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
+                console.log('AI summary generated:', aiSummary.slice(0, 100));
+              } else {
+                const errBody = await aiResp.text();
+                console.log(`AI summary failed: HTTP ${aiResp.status} ${aiResp.statusText}`, errBody.slice(0, 500));
               }
             } catch (e) {
-              console.log('AI summary failed, continuing without it:', e.message);
+              console.log('AI summary error:', e.message);
             }
 
             // Build per-file descriptions
