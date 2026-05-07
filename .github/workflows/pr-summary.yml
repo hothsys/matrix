@@ -1,7 +1,7 @@
 name: PR Summary
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize]
 
 jobs:
@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      models: read
     steps:
       - name: Generate PR Summary
         uses: actions/github-script@v7
@@ -34,24 +35,128 @@ jobs:
               pull_number: prNumber,
             });
 
-            const summary = `## 📋 PR Summary
+            // Build diff context for AI summary (truncate to avoid token limits)
+            const diffParts = files.slice(0, 12).map(f => {
+              const patch = (f.patch || '').slice(0, 1500);
+              return `--- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})\n${patch}`;
+            });
+            const diffContext = diffParts.join('\n\n');
 
-            **Title:** ${pr.title}
-            **Author:** @${pr.user.login}
-            **State:** ${pr.state.toUpperCase()}
-            **Draft:** ${pr.draft ? 'Yes' : 'No'}
+            const commitList = commits
+              .map(c => c.commit.message.split('\n')[0].trim())
+              .filter(m => m && !m.startsWith('Merge'))
+              .join('\n');
 
-            ### Changes
-            - **Commits:** ${commits.length}
-            - **Files Changed:** ${files.length}
-            - **Additions:** +${pr.additions}
-            - **Deletions:** -${pr.deletions}
+            // Call GitHub Models API to generate a natural-language summary
+            let aiSummary = '';
+            try {
+              const aiResp = await fetch('https://models.github.ai/inference/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'openai/gpt-4.1-mini',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (2-4 sentences) describing what this PR does and why. Focus on the purpose and impact, not listing files. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR adds..." not "I added...").'
+                    },
+                    {
+                      role: 'user',
+                      content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}`
+                    }
+                  ],
+                  temperature: 0.3,
+                  max_tokens: 300,
+                })
+              });
+              if (aiResp.ok) {
+                const aiData = await aiResp.json();
+                aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
+              }
+            } catch (e) {
+              console.log('AI summary failed, continuing without it:', e.message);
+            }
 
-            ### Files Modified
-            ${files.slice(0, 10).map(f => `- \`${f.filename}\` (${f.changes} changes)`).join('\n')}
-            ${files.length > 10 ? `- ... and ${files.length - 10} more files` : ''}
+            // Build per-file descriptions
+            function describeFile(file) {
+              const patch = file.patch || '';
+              const ext = file.filename.split('.').pop();
+              const lines = patch.split('\n');
 
-            ${pr.body ? `### Description\n${pr.body}` : ''}`;
+              if (file.status === 'added') return `New file (+${file.additions} lines)`;
+              if (file.status === 'removed') return `Deleted`;
+              if (file.status === 'renamed') return `Renamed from \`${file.previous_filename}\``;
+
+              const touchedFns = [];
+              for (const line of lines) {
+                const m = line.match(/^@@.*@@\s*(?:(?:async\s+)?function\s+|(?:def|class)\s+)([a-zA-Z_$][\w$]*)/);
+                if (m && !touchedFns.includes(m[1])) touchedFns.push(m[1]);
+              }
+
+              const newFns = [];
+              for (const line of lines) {
+                const m = line.match(/^\+\s*(?:(?:async\s+)?function\s+)([a-zA-Z_$][\w$]*)/);
+                if (m && !newFns.includes(m[1])) newFns.push(m[1]);
+                const py = line.match(/^\+\s*(?:def|class)\s+([a-zA-Z_][\w]*)/);
+                if (py && !newFns.includes(py[1])) newFns.push(py[1]);
+              }
+
+              if (ext === 'css') {
+                const selectors = new Set();
+                for (const line of lines) {
+                  if (!line.startsWith('+')) continue;
+                  const m = line.match(/^[+]\s*([.#][a-zA-Z][\w-]*|[a-z]+(?:\s*[>,+~]\s*[a-z]+)*)\s*\{/);
+                  if (m) selectors.add(m[1]);
+                }
+                if (selectors.size) return `Updated ${[...selectors].slice(0, 4).join(', ')}${selectors.size > 4 ? ' +more' : ''}`;
+                return `Style updates (+${file.additions}/-${file.deletions})`;
+              }
+
+              if (['md', 'txt', 'json'].includes(ext)) return `Updated (+${file.additions}/-${file.deletions})`;
+
+              const parts = [];
+              if (newFns.length) parts.push(`New: ${newFns.slice(0, 3).join(', ')}${newFns.length > 3 ? ' +' + (newFns.length - 3) + ' more' : ''}`);
+              const modOnly = touchedFns.filter(f => !newFns.includes(f));
+              if (modOnly.length) parts.push(`Modified: ${modOnly.slice(0, 4).join(', ')}${modOnly.length > 4 ? ' +' + (modOnly.length - 4) + ' more' : ''}`);
+              if (parts.length) return parts.join('. ');
+              return `+${file.additions}/-${file.deletions}`;
+            }
+
+            // Group files by directory
+            const groups = {};
+            for (const f of files) {
+              const dir = f.filename.includes('/') ? f.filename.split('/').slice(0, -1).join('/') : '.';
+              if (!groups[dir]) groups[dir] = [];
+              groups[dir].push(f);
+            }
+
+            const fileLines = [];
+            for (const [dir, dirFiles] of Object.entries(groups)) {
+              if (Object.keys(groups).length > 1) fileLines.push(`**${dir || 'root'}/**`);
+              for (const f of dirFiles.slice(0, 15)) {
+                const basename = f.filename.split('/').pop();
+                fileLines.push(`- \`${basename}\` — ${describeFile(f)}`);
+              }
+            }
+
+            const summary = [
+              '## 📋 PR Summary',
+              '',
+              `**Title:** ${pr.title}`,
+              `**Author:** @${pr.user.login}`,
+              `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
+              '',
+              `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
+              '',
+              aiSummary ? `### Description\n${aiSummary}` : null,
+              aiSummary ? '' : null,
+              '### Files',
+              ...fileLines,
+              files.length > 15 ? `- ... and ${files.length - 15} more files` : '',
+            ].filter(v => v !== null && v !== false && v !== undefined && v !== '').join('\n');
 
             await github.rest.issues.createComment({
               issue_number: prNumber,
