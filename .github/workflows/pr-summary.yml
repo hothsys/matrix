@@ -143,7 +143,6 @@ jobs:
               '',
               `**Title:** ${pr.title}`,
               `**Author:** @${pr.user.login}`,
-              `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
               '',
               `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
               '',
