@@ -37,8 +37,10 @@ jobs:
               pull_number: prNumber,
             });
 
-            // Build diff context for AI summary (truncate to avoid token limits)
-            const diffParts = files.slice(0, 12).map(f => {
+            // Build diff context for AI summary — skip CI/workflow files, focus on app code
+            const skipDirs = ['.github/', '.circleci/', '.gitlab/'];
+            const appFiles = files.filter(f => !skipDirs.some(d => f.filename.startsWith(d)));
+            const diffParts = (appFiles.length ? appFiles : files).slice(0, 12).map(f => {
               const patch = (f.patch || '').slice(0, 1500);
               return `--- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})\n${patch}`;
             });
@@ -59,11 +61,11 @@ jobs:
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  model: 'openai/gpt-4o-mini',
+                  model: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
                   messages: [
                     {
                       role: 'system',
-                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (2-4 sentences) describing what this PR does and why. Focus on the purpose and impact, not listing files. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR adds..." not "I added...").'
+                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (3-5 sentences) describing the functional changes in this PR. For each major change, explain WHAT was changed and WHY. Focus on application behavior and user-facing impact, not CI/workflow/tooling changes. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR fixes..." not "I fixed..."). Be specific — name the features, functions, or components affected.'
                     },
                     {
                       role: 'user',
