@@ -30,7 +30,7 @@ function readExifData(view, tiffStart, end) {
   const le = view.getUint16(tiffStart) === 0x4949; // little-endian?
   const g16 = (o) => view.getUint16(o, le);
   const g32 = (o) => view.getUint32(o, le);
-  const result = { lat: null, lng: null, date: null, time: null };
+  const result = { lat: null, lng: null, date: null, time: null, camera: null };
 
   function readIFD(ifdOffset) {
     if (ifdOffset + 2 > end) return {};
@@ -82,6 +82,16 @@ function readExifData(view, tiffStart, end) {
   // Read IFD0
   const ifd0Off = g32(tiffStart + 4);
   const ifd0 = readIFD(tiffStart + ifd0Off);
+
+  // Camera make (0x010F) and model (0x0110)
+  const make = getString(ifd0[0x010F]);
+  const model = getString(ifd0[0x0110]);
+  if (model) {
+    const m2 = model.trim();
+    const mk = make ? make.trim() : '';
+    // If model already starts with make (e.g. "Apple iPhone 15 Pro"), use model as-is
+    result.camera = (mk && m2.toLowerCase().indexOf(mk.toLowerCase()) === 0) ? m2 : (mk ? mk + ' ' + m2 : m2);
+  }
 
   // DateTimeOriginal is in ExifIFD
   if (ifd0[0x8769]) { // ExifIFD pointer
@@ -223,6 +233,7 @@ async function processFiles(files) {
         name: r.name.replace(/\.[^.]+$/,''),
         date: r.exif.date, time: r.exif.time,
         lat: r.exif.lat, lng: r.exif.lng,
+        camera: r.exif.camera || null,
         placeName: null, countryCode: null, note: '',
         dataUrl: r.dataUrl, thumbUrl: r.thumbUrl,
         addedAt: Date.now(), _dk: r.dk
@@ -280,8 +291,10 @@ function showLbPhoto(animate=false){
   if(!p) return;
   const img=document.getElementById('lb-img');
   const cap=document.getElementById('lb-caption');
+  const camEl=document.getElementById('lb-camera');
   const caption = (p.date ? fmtDate(p.date,p.time) : '') +
     (p.placeName ? (p.date?' · ':'') + p.placeName : '');
+  if (camEl) camEl.textContent = p.camera ? `📷 ${p.camera}` : '';
   if (animate) {
     img.style.transition='opacity .18s ease, transform .18s ease';
     cap.style.transition='opacity .18s ease';

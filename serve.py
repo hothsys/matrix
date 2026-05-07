@@ -67,7 +67,7 @@ DATA_FILE = os.path.join(APP_DIR, "matrix-data.json")
 PHOTOS_DIR = os.path.join(APP_DIR, "matrix-photos")
 TILES_DIR = os.path.join(APP_DIR, "matrix-tiles")
 VENDOR_DIR = os.path.join(APP_DIR, "vendor")
-MAX_TILES_MB = 200
+MAX_TILES_MB = 500
 LOG_FILE = os.path.join(APP_DIR, "matrix-requests.log")
 
 # Set up file logger for tile/GET requests
@@ -209,16 +209,23 @@ def _evict_tiles_if_needed():
         limit = MAX_TILES_MB * 1024 * 1024
         if total <= limit:
             return
+        before_mb = total / (1024 * 1024)
+        _req_logger.info(f'TILE EVICTION: cache at {before_mb:.1f}MB exceeds {MAX_TILES_MB}MB limit, beginning eviction')
         # Sort by modification time (oldest first) and evict
         files.sort()
+        evicted = 0
         for mtime, size, fp in files:
             if total <= limit * 0.8:  # Evict down to 80% to avoid thrashing
                 break
             try:
                 os.remove(fp)
                 total -= size
+                evicted += 1
             except OSError:
                 pass
+        after_mb = total / (1024 * 1024)
+        if evicted:
+            _req_logger.info(f'TILE EVICTION: removed {evicted} files, {before_mb:.1f}MB → {after_mb:.1f}MB (limit {MAX_TILES_MB}MB)')
     finally:
         _evict_lock.release()
 
