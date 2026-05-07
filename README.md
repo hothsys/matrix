@@ -134,7 +134,7 @@ The satellite view uses **ArcGIS World Imagery** (Esri) as a separate raster til
 
 ## Privacy
 
-Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/Nominatim for place lookups. No login required.
+Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/Nominatim for place lookups. No login required. 
 
 ---
 
