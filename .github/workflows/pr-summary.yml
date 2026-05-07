@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      models: read
     steps:
       - name: Generate PR Summary
         uses: actions/github-script@v7
@@ -34,7 +35,52 @@ jobs:
               pull_number: prNumber,
             });
 
-            // Analyze a file's patch to produce a one-line description
+            // Build diff context for AI summary (truncate to avoid token limits)
+            const diffParts = files.slice(0, 12).map(f => {
+              const patch = (f.patch || '').slice(0, 1500);
+              return `--- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})\n${patch}`;
+            });
+            const diffContext = diffParts.join('\n\n');
+
+            const commitList = commits
+              .map(c => c.commit.message.split('\n')[0].trim())
+              .filter(m => m && !m.startsWith('Merge'))
+              .join('\n');
+
+            // Call GitHub Models API to generate a natural-language summary
+            let aiSummary = '';
+            try {
+              const aiResp = await fetch('https://models.github.ai/inference/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'openai/gpt-4.1-mini',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (2-4 sentences) describing what this PR does and why. Focus on the purpose and impact, not listing files. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR adds..." not "I added...").'
+                    },
+                    {
+                      role: 'user',
+                      content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}`
+                    }
+                  ],
+                  temperature: 0.3,
+                  max_tokens: 300,
+                })
+              });
+              if (aiResp.ok) {
+                const aiData = await aiResp.json();
+                aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
+              }
+            } catch (e) {
+              console.log('AI summary failed, continuing without it:', e.message);
+            }
+
+            // Build per-file descriptions
             function describeFile(file) {
               const patch = file.patch || '';
               const ext = file.filename.split('.').pop();
@@ -44,15 +90,12 @@ jobs:
               if (file.status === 'removed') return `Deleted`;
               if (file.status === 'renamed') return `Renamed from \`${file.previous_filename}\``;
 
-              // Extract function/method names from hunk headers (the @@ lines)
-              // These show which functions were actually modified
               const touchedFns = [];
               for (const line of lines) {
                 const m = line.match(/^@@.*@@\s*(?:(?:async\s+)?function\s+|(?:def|class)\s+)([a-zA-Z_$][\w$]*)/);
                 if (m && !touchedFns.includes(m[1])) touchedFns.push(m[1]);
               }
 
-              // Extract newly added function/method declarations
               const newFns = [];
               for (const line of lines) {
                 const m = line.match(/^\+\s*(?:(?:async\s+)?function\s+)([a-zA-Z_$][\w$]*)/);
@@ -61,7 +104,6 @@ jobs:
                 if (py && !newFns.includes(py[1])) newFns.push(py[1]);
               }
 
-              // For CSS files, describe what changed
               if (ext === 'css') {
                 const selectors = new Set();
                 for (const line of lines) {
@@ -73,10 +115,8 @@ jobs:
                 return `Style updates (+${file.additions}/-${file.deletions})`;
               }
 
-              // For markdown/text, just show line counts
               if (['md', 'txt', 'json'].includes(ext)) return `Updated (+${file.additions}/-${file.deletions})`;
 
-              // Build description from functions
               const parts = [];
               if (newFns.length) parts.push(`New: ${newFns.slice(0, 3).join(', ')}${newFns.length > 3 ? ' +' + (newFns.length - 3) + ' more' : ''}`);
               const modOnly = touchedFns.filter(f => !newFns.includes(f));
@@ -85,7 +125,7 @@ jobs:
               return `+${file.additions}/-${file.deletions}`;
             }
 
-            // Group files by directory for the summary
+            // Group files by directory
             const groups = {};
             for (const f of files) {
               const dir = f.filename.includes('/') ? f.filename.split('/').slice(0, -1).join('/') : '.';
@@ -102,14 +142,6 @@ jobs:
               }
             }
 
-            // Generate a high-level summary from commit messages
-            const commitMsgs = commits
-              .map(c => c.commit.message.split('\n')[0].trim())
-              .filter(m => m && !m.startsWith('Merge'));
-            const commitSection = commitMsgs.length
-              ? ['### Commits', ...commitMsgs.map(m => `- ${m}`)]
-              : [];
-
             const summary = [
               '## 📋 PR Summary',
               '',
@@ -119,8 +151,8 @@ jobs:
               '',
               `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
               '',
-              ...commitSection,
-              commitSection.length ? '' : null,
+              aiSummary ? `### Description\n${aiSummary}` : null,
+              aiSummary ? '' : null,
               '### Files',
               ...fileLines,
               files.length > 15 ? `- ... and ${files.length - 15} more files` : '',
