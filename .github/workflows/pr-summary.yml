@@ -133,8 +133,8 @@ jobs:
               return `+${file.additions}/-${file.deletions}`;
             }
 
-            const appFiles = files.filter(f => !skipDirs.some(d => f.filename.startsWith(d)));
-            const fileLines = appFiles.slice(0, 15).map(f =>
+            const listedFiles = files.filter(f => !skipDirs.some(d => f.filename.startsWith(d)));
+            const fileLines = listedFiles.slice(0, 15).map(f =>
               `- \`${f.filename}\` — ${describeFile(f)}`
             );
 
@@ -143,6 +143,7 @@ jobs:
               '',
               `**Title:** ${pr.title}`,
               `**Author:** @${pr.user.login}`,
+              `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
               '',
               `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
               '',
