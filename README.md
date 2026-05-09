@@ -1,6 +1,6 @@
-# Matrix
+# <img src="logo_stroke.svg" width="100" valign="middle" hspace="10" vspace="4"/>Matrix
 
-A local-first travel photo mapping app — runs entirely in your browser, no account needed.
+*A local-first travel photo mapping app. Runs entirely in your browser, no account needed.*
 
 ## Quick Start
 
