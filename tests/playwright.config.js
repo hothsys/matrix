@@ -16,5 +16,6 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /safari-.*\.spec\.js/ },
   ],
 });

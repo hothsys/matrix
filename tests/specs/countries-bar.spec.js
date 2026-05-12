@@ -73,18 +73,18 @@ test.describe('Countries Bar', () => {
     // Flags should start collapsed
     await expect(flags).toHaveClass(/collapsed/);
 
-    // Toggle text should show count
-    await expect(toggle).toHaveText(/Show all 50 countries/);
+    // Toggle shows chevron arrow
+    await expect(toggle).toHaveText('▾');
 
-    // Click to expand
+    // Click to expand — arrow rotates (has 'expanded' class)
     await toggle.click();
     await expect(flags).not.toHaveClass(/collapsed/);
-    await expect(toggle).toHaveText('Show less');
+    await expect(toggle).toHaveClass(/expanded/);
 
     // Click to collapse again
     await toggle.click();
     await expect(flags).toHaveClass(/collapsed/);
-    await expect(toggle).toHaveText(/Show all 50 countries/);
+    await expect(toggle).not.toHaveClass(/expanded/);
   });
 
   test('toggle text reflects correct count', async ({ page }) => {
@@ -105,6 +105,6 @@ test.describe('Countries Bar', () => {
 
     const toggle = page.locator('#countries-toggle');
     await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveText(/Show all 30 countries/);
+    await expect(toggle).toHaveText('▾');
   });
 });

@@ -2,6 +2,20 @@
 
 *A local-first travel photo mapping app. Runs entirely in your browser, no account needed.*
 
+![Globe rotation](assets/globe.gif)
+
+<details>
+<summary>Dark Map</summary>
+
+![Dark Map](assets/dark.gif)
+</details>
+
+<details>
+<summary>Pin a Location</summary>
+
+![Pin a location](assets/pin.gif)
+</details>
+
 ## Quick Start
 
 1. **Download** the repository (git clone it).
@@ -45,7 +59,7 @@
 | 🗓 Timeline | Browse pinned photos chronologically |
 | 🖼 Lightbox | Full-size photo viewer with smooth navigation animations |
 | 📝 Notes | Add notes to any pin location |
-| 🛰 Map styles | Light, Dark, Terrain (natural earth shading), and Satellite (Esri) |
+| 🛰 Map styles | Light, Dark, Terrain, 3D Terrain, Satellite, and Globe |
 | 🗺 Vector tiles | Smooth zoom with no tile flickering (OpenFreeMap Liberty) |
 | 🔄 Clustering | Nearby pins cluster automatically, expand on zoom |
 | 💾 Auto-save | Automatic backup to disk when running via `serve.py` |
@@ -61,21 +75,65 @@
 
 ## Tile Caching
 
-Map tiles are cached in three layers for fast, offline-capable rendering:
+Map tiles are cached in a multi-layer architecture designed for fast rendering and offline access:
 
-| Layer | Storage | Speed | Scope | Persistence |
+### Storage Layers
+
+| Layer | What it is | Speed | Persistence | Browser support |
 |---|---|---|---|---|
-| **L1 — SW Cache API** | Browser (via service worker) | Instant | Per-browser | Cleared with browser data |
-| **L2 — Disk cache** | `matrix-tiles/` on disk (via `serve.py`) | Fast local read | Shared across all browsers | Persists until manually deleted |
-| **L3 — Origin fetch** | Remote tile server (OpenFreeMap / Esri) | Slowest | Requires internet | N/A |
+| **L1 — Cache API** | Browser-side HTTP response cache, managed by the service worker | Instant (~0ms) | Cleared with browser data | Chrome, Firefox (not Safari) |
+| **L2 — Disk cache** | Local filesystem at `matrix-tiles/`, served by `serve.py` | Fast (~5-10ms) | Persists until manually deleted or evicted | All browsers |
+| **L3 — Origin** | Remote tile servers (OpenFreeMap, ArcGIS) | Network-dependent (~50-200ms) | N/A | All browsers |
 
-On an L1 miss, the service worker checks L2 (disk proxy) first with a 50ms timeout. If the tile is on disk, it's served immediately with no origin request. If the disk check misses or times out, the service worker falls back to L3 (origin) with an 8-second timeout and one automatic retry on failure. Concurrency is limited by semaphores (4 concurrent disk, 6 concurrent origin) to prevent overwhelming either backend during rapid zoom transitions. After a successful origin fetch, the tile is saved to disk in the background for offline use.
+### How it works
 
-**URL-based versioning:** Tile URLs include a version segment (e.g., `20260415_001001_pt`) that changes when OpenFreeMap rebuilds their tile set. This means cached tiles are never stale — when tiles are updated, the style JSON points to new URLs, the cache naturally misses, and fresh tiles are fetched and cached. Old versioned tiles are eventually removed by LRU eviction.
+**Chrome / Firefox (with service worker):**
 
-The disk cache is capped at 500 MB with LRU eviction — when the limit is exceeded, the oldest tiles are removed down to 80% capacity. Eviction runs at startup and after each new tile is cached. Eviction events are logged to `matrix-requests.log`.
+```
+MapLibre requests tile
+    → SW intercepts
+    → L1 check (Cache API) — instant hit if previously fetched
+    → L1 miss: race L2 (disk proxy) and L3 (origin) via Promise.any
+        → Whichever responds first wins
+        → Result stored in L1 for future requests
+        → Origin fetches saved to L2 in background
+```
 
-**Proactive caching:** After app load, tiles for the world overview (z0–3) and pinned photo locations (z4–14) are prefetched in small batches. Already-cached tiles are skipped to avoid redundant network requests.
+**Safari (no service worker):**
+
+Safari's service worker implementation has persistent issues (premature context termination, stale caches, failed tile loads). The SW is intentionally disabled in Safari. Tiles flow directly:
+
+```
+MapLibre requests tile
+    → Browser fetches from origin (L3)
+    → Proactive caching (data.js) prefetches tiles via serve.py
+    → Disk cache (L2) available for offline use via serve.py proxy
+```
+
+### Data Storage (separate from tile caching)
+
+| Storage | What it stores | Used by |
+|---|---|---|
+| **IndexedDB** | Photos, albums, metadata, thumbnails, geo caches | App data layer (`dbPut()` / `dbGetAll()`) |
+| **Disk (matrix-data.json)** | Auto-save backup of all app data | `serve.py` auto-save endpoint |
+| **Disk (matrix-photos/)** | Full-size images and thumbnails | `serve.py` photo storage |
+
+IndexedDB and photo storage are unaffected by the service worker — app data persists identically in all browsers.
+
+### Tile cache configuration
+
+- **Disk cache limit:** 500 MB with LRU eviction (oldest tiles removed down to 80% when limit exceeded)
+- **Eviction runs:** at startup and after each new tile is cached
+- **Eviction logging:** written to `matrix-requests.log`
+- **SW Cache API limit:** 10,000 entries with zoom-aware LRU (low-zoom tiles z≤8 protected from eviction)
+
+### URL-based versioning
+
+Tile URLs include a version segment (e.g., `20260415_001001_pt`) that changes when OpenFreeMap rebuilds their tile set. Cached tiles are never stale — when tiles update, the style JSON points to new URLs, the cache naturally misses, and fresh tiles are fetched. Old versioned tiles are eventually evicted by LRU.
+
+### Proactive caching
+
+After app load (10s delay), tiles for the world overview (z0–3) and pinned photo locations (z4–14) are prefetched in small batches. Already-cached tiles are skipped. This runs in the background without blocking interactive map use.
 
 ## Video Export
 
@@ -128,13 +186,24 @@ The app uses three separate services that work together to render interactive ma
 - **OpenFreeMap** — the tile server. Takes OSM's raw data, renders it into vector map tiles (`.pbf` files), and serves them alongside style definitions (JSON files that describe how to color roads, label cities, etc.). Free, no API key required. The app uses its `liberty` style (light) and `dark` style.
 - **MapLibre GL JS** — the client-side rendering engine. A JavaScript library that takes tiles and style JSON from OpenFreeMap and renders an interactive, zoomable map on a `<canvas>` element in the browser. Handles panning, zooming, markers, clusters, and all map interaction.
 
-The satellite view uses **ArcGIS World Imagery** (Esri) as a separate raster tile source, unrelated to the OSM ecosystem.
+The app offers six map styles:
+
+| Style | Description |
+|---|---|
+| **Light Map** | Clean vector map with muted colors |
+| **Dark Map** | Dark-themed vector map with normalized labels |
+| **Terrain** | Light map with natural-earth shaded relief raster overlay |
+| **3D Terrain** | True 3D elevation via AWS Terrain Tiles with hillshading. Pitch/bearing/exaggeration controls appear at bottom-left. Right-click shows elevation in meters. |
+| **Satellite** | ArcGIS World Imagery raster tiles (Esri) |
+| **Globe** | Spherical globe projection — pan to see the whole Earth |
+
+The satellite and 3D Terrain views use separate raster tile sources unrelated to the OpenFreeMap/OSM ecosystem. 3D Terrain elevation data comes from **AWS Terrain Tiles** (free, no API key, terrarium encoding), capped at zoom 15 for maximum detail.
 
 **Nominatim** (run by OpenStreetMap) is used for geocoding — converting place names to coordinates. Requests are rate-limited to 1 per second per their usage policy.
 
 ## Privacy
 
-Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/Nominatim for place lookups. No login required. 
+Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/Nominatim for place lookups. No login required.
 
 ---
 

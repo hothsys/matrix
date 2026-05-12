@@ -197,6 +197,15 @@ function _refreshClustersNow() {
   const zoom   = Math.floor(map.getZoom());
   const bbox   = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
 
+  // In globe mode at very low zoom, Supercluster produces clusters with ocean centroids.
+  // Hide all markers below zoom 3 in globe mode — the clustering is too coarse.
+  if (_mapStyle === 'globe' && map.getZoom() < 3) {
+    Object.keys(domMarkers).forEach(key => { domMarkers[key].remove(); delete domMarkers[key]; });
+    const pinSrc = map.getSource('photo-pins');
+    if (pinSrc) pinSrc.setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
+
   let items;
   try { items = scIndex.getClusters(bbox, zoom); } catch { return; }
 

@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v17';
+const CACHE_VERSION = 'matrix-v19';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -18,6 +18,7 @@ const APP_SHELL = [
   '/js/search.js',
   '/js/media.js',
   '/js/data.js',
+  '/js/demo.js',
   '/vendor/maplibre-gl.js',
   '/vendor/maplibre-gl.css',
   '/vendor/supercluster.min.js',

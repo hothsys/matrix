@@ -495,6 +495,11 @@ async function checkAutoRestore() {
 // INIT
 // ═══════════════════════════════════════
 async function init() {
+  // Force stale service workers to update immediately
+  if (navigator.serviceWorker?.controller) {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) { reg.update().catch(() => {}); }
+  }
   await initMap();
   await openDB();
   const [savedPhotos, savedAlbums] = await Promise.all([dbGetAll('photos'), dbGetAll('albums')]);
@@ -593,12 +598,17 @@ function updateOfflineState(offline) {
 window.addEventListener('online', () => updateOfflineState(false));
 window.addEventListener('offline', () => updateOfflineState(true));
 
-// Register service worker and send server port for tile proxy
-if ('serviceWorker' in navigator) {
+// Register service worker (skip Safari — its SW implementation causes persistent
+// tile loading failures, "Context is stopped" errors, and stale cache issues)
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+if ('serviceWorker' in navigator && !isSafari) {
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(err => console.warn('SW registration failed:', err));
   navigator.serviceWorker.ready.then(reg => {
     if (reg.active) reg.active.postMessage({ type: 'set-port', port: location.port || '8765' });
   });
+} else if (isSafari && navigator.serviceWorker) {
+  // Unregister any existing SW in Safari to clean up stale state
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
 }
 
 // Show offline banner on load if needed

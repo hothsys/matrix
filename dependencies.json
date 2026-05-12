@@ -1,0 +1,30 @@
+{
+  "vendor": [
+    {
+      "name": "maplibre-gl",
+      "version": "5.24.0",
+      "files": {
+        "maplibre-gl.js": "https://unpkg.com/maplibre-gl@{{version}}/dist/maplibre-gl.js",
+        "maplibre-gl.js.map": "https://unpkg.com/maplibre-gl@{{version}}/dist/maplibre-gl.js.map",
+        "maplibre-gl.css": "https://unpkg.com/maplibre-gl@{{version}}/dist/maplibre-gl.css"
+      },
+      "registry": "npm"
+    },
+    {
+      "name": "supercluster",
+      "version": "8.0.1",
+      "files": {
+        "supercluster.min.js": "https://unpkg.com/supercluster@{{version}}/dist/supercluster.min.js"
+      },
+      "registry": "npm"
+    },
+    {
+      "name": "exif-js",
+      "version": "2.3.0",
+      "files": {
+        "exif.js": "https://cdnjs.cloudflare.com/ajax/libs/exif-js/{{version}}/exif.js"
+      },
+      "registry": "npm"
+    }
+  ]
+}
