@@ -35,18 +35,11 @@
    or click it to browse your drive.
 
 ---
-<img width="3438" height="1692" alt="image" src="https://github.com/user-attachments/assets/4d802eac-8328-4dcf-85ab-7dfa9999a584" />
 
----
-<img width="810" height="686" alt="animated" src="https://github.com/user-attachments/assets/38eccc4b-95bb-4b9f-a668-b125b30e2d5e" />
-
----
-<img width="988" height="604" alt="animated_panning" src="https://github.com/user-attachments/assets/a377f963-a288-4bce-bc78-f2f24ca52f20" />
-
----
 [![Watch video](https://github.com/user-attachments/assets/d667bd48-5f01-463a-abe7-107561fb01b1)](https://www.youtube.com/watch?v=w9MhBRoiUho)
 
 ---
+
 ## Features
 
 | Feature | Detail |
