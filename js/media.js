@@ -556,6 +556,7 @@ function exportPreloadPhoto(photoId) {
 
 async function exportVideo() {
   if (_exporting || _playbackActive) return;
+  if (_mapStyle === 'globe') { showToast('Export Video is not available in Globe mode', 'error'); return; }
 
   // Build stops (same logic as startPlayback)
   const dated = photos.filter(p => p.lat !== null && p.date)
@@ -586,22 +587,25 @@ async function exportVideo() {
   // Close any open popups
   if (activePopup) { activePopup.remove(); activePopup = null; }
 
+  // Verify preserveDrawingBuffer is active — required to copy map canvas to export canvas
+  const gl = map.getCanvas().getContext('webgl2') || map.getCanvas().getContext('webgl');
+  if (gl && !gl.getContextAttributes()?.preserveDrawingBuffer) {
+    showToast('Video export requires preserveDrawingBuffer — check map initialization', 'error');
+    return;
+  }
+
   // Helper: wait until map is fully rendered (tiles decoded + GPU flushed)
-  async function waitForMapReady(timeoutMs = 15000) {
-    if (!map.areTilesLoaded() || !map.isStyleLoaded()) {
-      await Promise.race([
-        new Promise(resolve => {
-          const check = () => {
-            if (map.areTilesLoaded() && map.isStyleLoaded()) resolve();
-            else map.once('idle', check);
-          };
-          map.once('idle', check);
-        }),
-        new Promise(resolve => setTimeout(resolve, timeoutMs))
-      ]);
-    }
-    // Force repaint and wait for GPU flush (2 frames)
-    map.triggerRepaint();
+  async function waitForMapReady(timeoutMs = 8000) {
+    await new Promise(resolve => {
+      if (map.loaded() && map.areTilesLoaded() && map.isStyleLoaded()) {
+        resolve(); return;
+      }
+      let done = false;
+      const finish = () => { if (!done) { done = true; map.off('idle', finish); resolve(); } };
+      map.on('idle', finish);
+      setTimeout(finish, timeoutMs);
+    });
+    // Wait 2 animation frames for GPU to flush
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   }
 
@@ -675,9 +679,38 @@ async function exportVideo() {
   const stream = _exportCanvas.captureStream(30);
   const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
   let mime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+  // Start a disk-streaming session — chunks written directly to disk, not held in memory
   _exportChunks = [];
+  let _videoSessionId = null;
+  let _chunkQueue = Promise.resolve();
+  const startResp = await fetch('/api/video/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mime })
+  });
+  if (startResp.ok) {
+    const startData = await startResp.json();
+    _videoSessionId = startData.id;
+  }
+
   _exportMediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 40000000 });
-  _exportMediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _exportChunks.push(e.data); };
+  _exportMediaRecorder.ondataavailable = (e) => {
+    if (!e.data.size) return;
+    if (_videoSessionId) {
+      // Stream chunk to disk (fire-and-forget, queued to maintain order)
+      const blob = e.data;
+      _chunkQueue = _chunkQueue.then(() =>
+        fetch(`/api/video/chunk?id=${_videoSessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': blob.size },
+          body: blob
+        }).catch(() => {})
+      );
+    } else {
+      // Fallback: buffer in memory if server unavailable
+      _exportChunks.push(e.data);
+    }
+  };
 
   // Start recording + frame loop
   _exportFade = 0;
@@ -699,24 +732,23 @@ async function exportVideo() {
     const pct = 30 + Math.round((i / stops.length) * 65);
     exportUpdateProgress(`Recording — destination ${i + 1} of ${stops.length}`, pct);
 
-    // ── Transition to destination ──
-    // Fade to black
-    await exportAnimateFade(0, 1, 600);
+    // ── Fly to destination (recorded) ──
+    await new Promise(resolve => {
+      map.once('moveend', resolve);
+      map.flyTo({
+        center: [stop.lng, stop.lat], zoom: 14,
+        speed: 0.6, curve: 1.0, essential: true,
+        easing: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2
+      });
+    });
     if (!_exporting) break;
 
-    // While screen is black: jump to destination and wait for tiles
-    map.jumpTo({ center: [stop.lng, stop.lat], zoom: 14 });
+    // Wait for tiles to finish loading at destination
     await waitForMapReady();
-    // Extra settle time for GPU
-    await new Promise(r => setTimeout(r, 200));
-    if (!_exporting) break;
-
-    // Fade in the map at the destination
-    await exportAnimateFade(1, 0, 600);
     if (!_exporting) break;
 
     // Hold on map view briefly
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 1000));
     if (!_exporting) break;
 
     // ── Show photos at this destination ──
@@ -745,14 +777,14 @@ async function exportVideo() {
     }
     if (!_exporting) break;
 
-    // Fade back to map
+    // Fade out photo, reveal map
     await exportAnimateFade(0, 1, 500);
     _exportShowPhoto = false;
     _exportPhotoImg = null;
     await exportAnimateFade(1, 0, 400);
 
-    // Brief hold on map before next destination
-    await new Promise(r => setTimeout(r, 400));
+    // Hold on map briefly before flying to next stop
+    await new Promise(r => setTimeout(r, 600));
   }
 
   // Stop recording
@@ -765,16 +797,29 @@ async function exportVideo() {
   });
 
   // Download
-  const blob = new Blob(_exportChunks, { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const dateStr = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `matrix-trip-${dateStr}.webm`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  if (_videoSessionId) {
+    // Wait for all in-flight chunk uploads to complete, then finalize
+    await _chunkQueue;
+    await fetch(`/api/video/finalize?id=${_videoSessionId}`, { method: 'POST' });
+    const a = document.createElement('a');
+    a.href = `/api/video/download?id=${_videoSessionId}`;
+    a.download = `matrix-trip-${dateStr}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } else {
+    // Fallback: in-memory blob
+    const blob = new Blob(_exportChunks, { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `matrix-trip-${dateStr}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
 
   // Cleanup
   exportCleanup();
@@ -797,6 +842,10 @@ function cancelExport() {
   _exporting = false;
   if (_exportMediaRecorder && _exportMediaRecorder.state !== 'inactive') {
     _exportMediaRecorder.stop();
+  }
+  // Abort any in-progress disk session
+  if (typeof _videoSessionId !== 'undefined' && _videoSessionId) {
+    fetch(`/api/video/abort?id=${_videoSessionId}`, { method: 'POST' }).catch(() => {});
   }
   exportCleanup();
   showToast('Export cancelled', 'error');

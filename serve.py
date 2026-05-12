@@ -95,23 +95,38 @@ def _rotate_log():
     except OSError:
         pass
 
-# External dependencies to bundle locally
-VENDOR_FILES = {
-    "maplibre-gl.js": "https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js",
-    "maplibre-gl.css": "https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css",
-    "supercluster.min.js": "https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js",
-    "exif.js": "https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js",
-}
+DEPS_FILE = os.path.join(APP_DIR, "dependencies.json")
 
 # Google Fonts to download (woff2 for modern browsers)
 GOOGLE_FONTS_CSS_URL = "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600;700&display=swap"
 
 
+def _load_dependencies():
+    """Load vendor dependencies from dependencies.json."""
+    deps_file = os.path.join(APP_DIR, "dependencies.json")
+    with open(deps_file, "r") as f:
+        deps = json.load(f)
+    vendor_files = {}
+    for dep in deps["vendor"]:
+        version = dep["version"]
+        for filename, url_template in dep["files"].items():
+            vendor_files[filename] = url_template.replace("{{version}}", version)
+    return deps["vendor"], vendor_files
+
 def setup_vendor():
     """Download external dependencies to vendor/ for offline use."""
     os.makedirs(VENDOR_DIR, exist_ok=True)
+
+    deps, vendor_files = _load_dependencies()
+
+    # Print dependency versions
+    print("  Dependencies:")
+    for dep in deps:
+        print(f"    {dep['name']} v{dep['version']}")
+    print()
+
     needed = []
-    for name, url in VENDOR_FILES.items():
+    for name, url in vendor_files.items():
         if not os.path.exists(os.path.join(VENDOR_DIR, name)):
             needed.append((name, url))
 
@@ -168,6 +183,10 @@ PHOTO_RE = re.compile(r"^/api/photos/([a-zA-Z0-9_-]+)(/thumb)?$")
 
 # Allowed tile origins for the proxy
 TILE_ALLOWED_HOSTS = {'tiles.openfreemap.org', 'server.arcgisonline.com'}
+
+# Video export streaming state: session_id -> {path, file, mime}
+_video_sessions = {}
+_video_lock = threading.Lock()
 
 
 # Content-Type by extension
@@ -252,6 +271,8 @@ class MatrixHandler(SimpleHTTPRequestHandler):
                 self._serve_data()
             elif self.path.startswith("/api/tiles/proxy?"):
                 self._proxy_tile()
+            elif self.path.startswith("/api/video/download?"):
+                self._download_video()
             elif self.path in self._SILENT_PATHS:
                 self.send_response(204)
                 self.end_headers()
@@ -266,6 +287,14 @@ class MatrixHandler(SimpleHTTPRequestHandler):
                 self._save_data()
             elif self.path.startswith("/api/tiles/cache?"):
                 self._cache_tile()
+            elif self.path == "/api/video/start":
+                self._video_start()
+            elif self.path.startswith("/api/video/chunk?"):
+                self._video_chunk()
+            elif self.path.startswith("/api/video/finalize?"):
+                self._video_finalize()
+            elif self.path.startswith("/api/video/abort?"):
+                self._video_abort()
             else:
                 m = PHOTO_RE.match(self.path)
                 if m:
@@ -455,6 +484,103 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         threading.Thread(target=_evict_tiles_if_needed, daemon=True).start()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def _video_start(self):
+        """Start a new video export session, return session ID."""
+        from urllib.parse import parse_qs
+        length = int(self.headers.get('Content-Length', 0))
+        body = json.loads(self.rfile.read(length)) if length else {}
+        mime = body.get('mime', 'video/webm')
+        ext = 'webm' if 'webm' in mime else 'mp4'
+        session_id = f"vid_{int(time.time() * 1000)}"
+        path = os.path.join(APP_DIR, f"matrix-video-{session_id}.{ext}")
+        with _video_lock:
+            _video_sessions[session_id] = {'path': path, 'file': open(path, 'wb'), 'mime': mime}
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'ok': True, 'id': session_id}).encode())
+
+    def _video_chunk(self):
+        """Append a video chunk to the session file."""
+        from urllib.parse import parse_qs
+        qs = parse_qs(self.path.split('?', 1)[1])
+        session_id = qs.get('id', [None])[0]
+        length = int(self.headers.get('Content-Length', 0))
+        data = self.rfile.read(length)
+        with _video_lock:
+            session = _video_sessions.get(session_id)
+            if session and session.get('file'):
+                session['file'].write(data)
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def _video_finalize(self):
+        """Close the video file and prepare it for download."""
+        from urllib.parse import parse_qs
+        qs = parse_qs(self.path.split('?', 1)[1])
+        session_id = qs.get('id', [None])[0]
+        with _video_lock:
+            session = _video_sessions.get(session_id)
+            if not session:
+                self.send_error(404, 'Session not found')
+                return
+            if session.get('file'):
+                session['file'].close()
+                session['file'] = None
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'ok': True, 'id': session_id}).encode())
+
+    def _download_video(self):
+        """Stream the completed video file to the browser for download."""
+        from urllib.parse import parse_qs
+        qs = parse_qs(self.path.split('?', 1)[1])
+        session_id = qs.get('id', [None])[0]
+        with _video_lock:
+            session = _video_sessions.get(session_id)
+        if not session or not os.path.isfile(session['path']):
+            self.send_error(404, 'Video not found')
+            return
+        path = session['path']
+        size = os.path.getsize(path)
+        filename = os.path.basename(path).replace(f"-{session_id}", '')
+        self.send_response(200)
+        self.send_header('Content-Type', session['mime'])
+        self.send_header('Content-Length', str(size))
+        self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+        self.end_headers()
+        with open(path, 'rb') as f:
+            while chunk := f.read(1024 * 1024):
+                self.wfile.write(chunk)
+        # Cleanup session and temp file
+        with _video_lock:
+            _video_sessions.pop(session_id, None)
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+    def _video_abort(self):
+        """Abort a video session and delete the temp file."""
+        from urllib.parse import parse_qs
+        qs = parse_qs(self.path.split('?', 1)[1])
+        session_id = qs.get('id', [None])[0]
+        with _video_lock:
+            session = _video_sessions.pop(session_id, None)
+        if session:
+            if session.get('file'):
+                try: session['file'].close()
+                except: pass
+            try: os.remove(session['path'])
+            except: pass
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
 

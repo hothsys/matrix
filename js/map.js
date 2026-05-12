@@ -1,7 +1,11 @@
 // ═══════════════════════════════════════
 // MAP
 // ═══════════════════════════════════════
-function _styleUrl() { return _mapStyle === 'satellite' ? STYLE_SAT : _mapStyle === 'dark' ? STYLE_DARK : STYLE_STREET; }
+function _styleUrl() {
+  if (_mapStyle === 'satellite') return STYLE_SAT;
+  if (_mapStyle === 'dark') return STYLE_DARK;
+  return STYLE_STREET; // light, enriched, terrain3d, globe all use Liberty as base
+}
 const STYLE_STREET = 'https://tiles.openfreemap.org/styles/liberty';
 const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const STYLE_SAT = {
@@ -314,7 +318,7 @@ function addPinLayers() {
 // ═══════════════════════════════════════
 function initTheme() {
   const stored = localStorage.getItem('matrix-theme');
-  if (stored && ['dark', 'light', 'enriched'].includes(stored)) {
+  if (stored && ['dark', 'light', 'enriched', 'terrain3d', 'globe'].includes(stored)) {
     _mapStyle = stored;
   } else {
     _mapStyle = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -326,10 +330,16 @@ function applyTheme() {
   _tileTemplatesCache = null;
   // Set initial button label
   const btn = document.getElementById('tb-style-btn');
-  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map' };
+  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
   // Set initial active state in menu
   document.querySelectorAll('.style-menu-item').forEach(el => el.classList.toggle('active', el.dataset.style === _mapStyle));
+  // Disable Export Video in Globe mode
+  const exportBtn = document.getElementById('tb-export-video');
+  if (exportBtn) {
+    exportBtn.disabled = _mapStyle === 'globe';
+    exportBtn.title = _mapStyle === 'globe' ? 'Export Video is not available in Globe mode' : 'Export trip animation as video';
+  }
 }
 // Cache fetched style JSONs so switching between styles is instant after the first load
 const _styleJsonCache = {};
@@ -372,6 +382,11 @@ async function _doStyleSwap(style) {
       applyLabelVisibility();
       // Re-add pin icons from pixel cache (fast) and refresh clusters
       // without rebuilding the Supercluster index (unchanged)
+      // Update dark-map CSS class after pin icons are re-added with correct compensation
+      document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
+      // Apply terrain + projection BEFORE refreshing clusters so markers
+      // are positioned under the correct projection (globe vs mercator)
+      _applyTerrainAndProjection();
       if (scIndex) {
         const pinned = photos.filter(p => p.lat !== null);
         const seen = new Set();
@@ -387,8 +402,6 @@ async function _doStyleSwap(style) {
       } else {
         buildClusterIndex();
       }
-      // Update dark-map CSS class after pin icons are re-added with correct compensation
-      document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
     };
     map.once('styledata', () => setTimeout(restore, 100));
     setTimeout(restore, 600);
@@ -415,7 +428,8 @@ async function initMap() {
   // Pre-warm the other style into cache so the first switch is instant
   const otherUrl = styleUrl === STYLE_DARK ? STYLE_STREET : STYLE_DARK;
   fetch(otherUrl).then(r => r.json()).then(j => { _styleJsonCache[otherUrl] = j; }).catch(() => {});
-  map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, preserveDrawingBuffer:true, maxTileCacheSize:200 });
+  map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, maxTileCacheSize:200, canvasContextAttributes:{ preserveDrawingBuffer:true } });
+  map.on('error', (e) => console.error('MapLibre error:', e.error?.message || e.message || e));
   map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
   // Recover from WebGL context loss (Safari loses context after sleep or memory pressure)
   const canvas = map.getCanvas();
@@ -449,8 +463,35 @@ async function initMap() {
     zoomEl.id = 'zoom-debug';
     zoomEl.style.cssText = 'position:absolute;bottom:24px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace';
     document.getElementById('map').appendChild(zoomEl);
-    const updateZoom = () => { zoomEl.textContent = 'z' + map.getZoom().toFixed(2); };
+    const pitchEl = document.createElement('div');
+    pitchEl.id = 'pitch-debug';
+    pitchEl.style.cssText = 'position:absolute;bottom:24px;left:70px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace;display:none';
+    document.getElementById('map').appendChild(pitchEl);
+    const exaggerationEl = document.createElement('div');
+    exaggerationEl.id = 'exaggeration-ctrl';
+    exaggerationEl.style.cssText = 'position:absolute;bottom:20px;left:190px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
+    exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.5" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.5×</span>';
+    document.getElementById('map').appendChild(exaggerationEl);
+    document.getElementById('exaggeration-slider').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      document.getElementById('exaggeration-val').textContent = val.toFixed(1) + '×';
+      if (map.getTerrain()) map.setTerrain({ source: 'terrain-dem', exaggeration: val });
+    });
+    const updateZoom = () => {
+      zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
+      const is3D = _mapStyle === 'terrain3d';
+      if (is3D) {
+        pitchEl.style.display = '';
+        pitchEl.textContent = `p${map.getPitch().toFixed(0)}° b${map.getBearing().toFixed(0)}°`;
+      } else {
+        pitchEl.style.display = 'none';
+      }
+      const exCtrl = document.getElementById('exaggeration-ctrl');
+      if (exCtrl) exCtrl.style.display = is3D ? 'flex' : 'none';
+    };
     map.on('zoom', updateZoom);
+    map.on('pitch', updateZoom);
+    map.on('rotate', updateZoom);
     map.on('moveend', updateZoom);
     map.on('moveend', _onMapMoveForSearch);
     updateZoom();
@@ -477,6 +518,7 @@ async function initMap() {
     }
     applyLabelScale();
     applyLabelVisibility();
+    _applyTerrainAndProjection();
     // Tile loading spinner
     const tileSpinner = document.getElementById('tile-spinner');
     map.on('dataloading', () => { tileSpinner?.classList.add('active'); });
@@ -492,11 +534,13 @@ async function initMap() {
     try {
     e.preventDefault();
     // Detect water vs land early — water clicks are allowed at any zoom,
-    // land clicks require zoom >= 7 for meaningful Nominatim results.
-    // Satellite mode has no vector layers for water detection, so require zoom >= 7.
+    // Water clicks allowed at any zoom; land clicks require zoom >= 5.
+    // Satellite/terrain3d/globe have no vector layers for water detection.
     const allHits = map.queryRenderedFeatures(e.point);
-    const isWater = _mapStyle !== 'satellite' && allHits.some(f => f.layer.type === 'fill' && /^(water|ocean)/.test(f.layer.id));
-    if (!isWater && map.getZoom() < 7) return;
+    const noVectorLayers = ['satellite', 'terrain3d', 'globe'].includes(_mapStyle);
+    const isWater = !noVectorLayers && allHits.some(f => f.layer.type === 'fill' && /^(water|ocean)/.test(f.layer.id));
+    // If style is mid-transition (queryRenderedFeatures returns nothing), treat as land
+    if (!isWater && map.getZoom() < 5) return;
     const { lng, lat } = e.lngLat;
     // Close any existing popups
     if (activePopup) { activePopup.remove(); activePopup = null; }
@@ -555,6 +599,15 @@ async function initMap() {
 
     loadingPopup.remove();
 
+    // Elevation — only in 3D Terrain mode
+    let elevationStr = '';
+    if (_mapStyle === 'terrain3d') {
+      const elev = map.queryTerrainElevation([lng, lat]);
+      if (elev !== null && elev !== undefined) {
+        elevationStr = `${Math.round(elev).toLocaleString()}m`;
+      }
+    }
+
     // Create dest marker + confirmation popup
     const el = document.createElement('div');
     el.className = 'dest-pin-el';
@@ -565,7 +618,7 @@ async function initMap() {
     const displayName = country && country !== placeName ? `${placeName}, ${country}` : placeName;
     const popup = new maplibregl.Popup({ maxWidth: '240px', closeButton: true, offset: 30 })
       .setLngLat([lng, lat])
-      .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(displayName)}</div><button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button></div>`)
+      .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(displayName)}</div>${elevationStr ? `<div class="dest-popup-detail">⛰ ${elevationStr} elevation</div>` : ''}<button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button></div>`)
       .addTo(map);
     popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
 
@@ -592,202 +645,9 @@ async function initMap() {
   }, true); // capture phase at window level — nothing can intercept before this
 }
 
-// Demo: automated walkthrough with fake cursor
-function runDemo() {
-  const step = (fn) => new Promise(res => fn(res));
-  const fly = (center, zoom, duration) => step(res => {
-    map.flyTo({ center, zoom, duration });
-    map.once('moveend', res);
-  });
-  const wait = (ms) => new Promise(res => setTimeout(res, ms));
-  const rightClick = (lat, lng) => step(res => {
-    const point = map.project([lng, lat]);
-    map.fire('contextmenu', { lngLat: { lng, lat }, point, preventDefault: () => {} });
-    const poll = setInterval(() => {
-      const btn = document.querySelector('.dest-popup-btn[onclick*="pinEmptyLocation"]');
-      if (btn) { clearInterval(poll); res(btn); }
-    }, 300);
-  });
-
-  const hover = (el) => {
-    el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-  };
-  const unhover = (el) => {
-    el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
-  };
-
-  // Fake cursor element
-  const cursor = document.createElement('div');
-  cursor.style.cssText = 'position:fixed;z-index:100000;pointer-events:none;width:32px;height:32px;transition:left .5s ease,top .5s ease,opacity .3s;opacity:0;left:-50px;top:-50px';
-  // SVG cursor arrow
-  cursor.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M5 3L19 12L12 13L9 20L5 3Z" fill="white" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
-  </svg>`;
-  document.body.appendChild(cursor);
-
-  // Move cursor to an element or map coordinates
-  const moveTo = async (target, duration = 500) => {
-    let x, y;
-    if (target instanceof Element) {
-      const r = target.getBoundingClientRect();
-      x = r.left + r.width / 2;
-      y = r.top + r.height / 2;
-    } else if (target.lat !== undefined) {
-      const pt = map.project([target.lng, target.lat]);
-      const mapRect = map.getContainer().getBoundingClientRect();
-      x = mapRect.left + pt.x;
-      y = mapRect.top + pt.y;
-    }
-    cursor.style.transition = `left ${duration}ms ease, top ${duration}ms ease, opacity .3s`;
-    cursor.style.left = x + 'px';
-    cursor.style.top = y + 'px';
-    cursor.style.opacity = '1';
-    await wait(duration + 50);
-  };
-  const hideCursor = () => { cursor.style.opacity = '0'; };
-  // Brief scale pulse on click
-  const clickPulse = async () => {
-    cursor.style.transition = 'transform .1s';
-    cursor.style.transform = 'scale(0.8)';
-    await wait(100);
-    cursor.style.transform = 'scale(1)';
-    await wait(100);
-  };
-
-  (async () => {
-    // Snapshot existing photo IDs so we can clean up demo pins at the end
-    const preExistingIds = new Set(photos.map(p => p.id));
-
-    // Start on Photos tab in Dark Map
-    if (activeAlbumId) closeAlbumDetail();
-    switchSideTab('photos');
-    await wait(300);
-    setMapStyle('dark');
-    await wait(1500);
-
-    // 1. Start at zoom 4 over France, fly to Paris at zoom 8
-    map.jumpTo({ center: [2.3, 46.6], zoom: 4 });
-    await wait(1000);
-    await fly([2.3522, 48.8566], 8, 3000);
-    await wait(500);
-
-    // Move cursor to Paris, right-click
-    await moveTo({ lat: 48.8566, lng: 2.3522 });
-    await clickPulse();
-    const pinBtn = await rightClick(48.8566, 2.3522);
-    await wait(800);
-
-    // Move cursor to "Pin this location" button and click
-    await moveTo(pinBtn);
-    await clickPulse();
-    pinBtn.click();
-    await wait(1500);
-    hideCursor();
-
-    // 2. Zoom back out to level 2
-    await fly([2.3522, 48.8566], 2, 2000);
-    await wait(1000);
-
-    // Fly to Sri Lanka at zoom 7
-    await fly([80.7718, 7.8731], 7, 4000);
-    await wait(1500);
-
-    // Pan to Turkey
-    await fly([32.0, 39.9], 7, 4000);
-    await wait(1000);
-
-    // Zoom out to level 1, switch to Light Map
-    await fly([32.0, 39.9], 1, 2000);
-    setMapStyle('light');
-    await wait(2000);
-
-    // Zoom to Saint Kitts & Nevis at level 10, then into Frigate Bay
-    await fly([-62.783, 17.357], 10, 4000);
-    await wait(1000);
-    await fly([-62.6884, 17.2829], 16, 3000);
-    await wait(2000);
-
-    // 3. Hover over country flags in Countries Visited
-    const flags = document.querySelectorAll('#countries-flags span');
-    if (flags.length >= 2) {
-      await moveTo(flags[0]);
-      hover(flags[0]);
-      await wait(1000);
-      unhover(flags[0]);
-      await moveTo(flags[1]);
-      hover(flags[1]);
-      await wait(1000);
-      unhover(flags[1]);
-    }
-    await wait(500);
-
-    // 4. Switch to Albums tab
-    const albumsTab = document.querySelector('.stab:nth-child(3)');
-    if (albumsTab) {
-      await moveTo(albumsTab);
-      await clickPulse();
-    }
-    switchSideTab('albums');
-    await wait(800);
-
-    // Open the first visible album card (sorted order matches what's on screen)
-    const albumCard = document.querySelector('.album-card');
-    if (albumCard) {
-      await moveTo(albumCard);
-      await clickPulse();
-      albumCard.click(); // triggers openAlbumDetail for the correct album
-      await wait(1000);
-
-      // Click first photo in the album detail to open lightbox
-      const photoRow = document.querySelector('#alb-detail-body .alb-photo-row');
-      if (photoRow) {
-        await moveTo(photoRow);
-        await clickPulse();
-        photoRow.click();
-
-        // Wait for lightbox to open and image to load
-        await step(res => {
-          const poll = setInterval(() => {
-            const lb = document.getElementById('lightbox');
-            const img = document.getElementById('lb-img');
-            if (lb.classList.contains('open') && img && img.complete && img.naturalWidth) {
-              clearInterval(poll);
-              res();
-            }
-          }, 200);
-        });
-        hideCursor();
-        await wait(2000);
-
-        // Close lightbox
-        closeLightbox();
-      }
-    }
-
-    // Remove fake cursor
-    cursor.remove();
-
-    // Cleanup: remove empty pins created during demo
-    const demoPins = photos.filter(p => p.isEmptyPin && !preExistingIds.has(p.id));
-    for (const p of demoPins) {
-      photos.splice(photos.indexOf(p), 1);
-      photoMap.delete(p.id);
-      dbDel('photos', p.id);
-      deletePhotoFiles(p.id);
-    }
-    if (demoPins.length) {
-      refreshAll();
-      scheduleAutoSave();
-    }
-  })();
-}
-
 // Ctrl+Shift+D to trigger demo
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'D') { e.preventDefault(); runDemo(); }
-});
+// Ctrl+Shift+G to trigger globe rotation demo
+// See js/demo.js for implementations
 
 // ═══════════════════════════════════════
 // FIT MAP
@@ -850,14 +710,21 @@ function setMapStyle(mode) {
   // compensation (otherwise pre-darkened images render without the CSS filter)
   const mapEl = document.getElementById('map');
   if (_mapStyle === 'dark') mapEl.classList.add('dark-map');
-  mapEl.classList.toggle('sat-mode', _mapStyle === 'satellite');
+  mapEl.classList.toggle('sat-mode', ['satellite', 'terrain3d', 'globe'].includes(_mapStyle));
 
   // Labels toggle visibility
   const labelsWrap = document.getElementById('labels-toggle-wrap');
   if (labelsWrap) labelsWrap.style.visibility = _mapStyle === 'satellite' ? 'hidden' : 'visible';
 
+  // Disable Export Video in Globe mode (flyTo animation doesn't translate to globe projection)
+  const exportBtn = document.getElementById('tb-export-video');
+  if (exportBtn) {
+    exportBtn.disabled = _mapStyle === 'globe';
+    exportBtn.title = _mapStyle === 'globe' ? 'Export Video is not available in Globe mode' : 'Export trip animation as video';
+  }
+
   // Update button label
-  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite' };
+  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   const btn = document.getElementById('tb-style-btn');
   if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
 
@@ -867,6 +734,60 @@ function setMapStyle(mode) {
   // Close the dropdown
   document.getElementById('style-menu').classList.remove('open');
 
-  // Swap the map style
+  // Clean up terrain + projection before swapping styles so the style diff doesn't fail
+  // (terrain-dem source added via map.addSource would cause a diff error if left attached)
+  if (map.getTerrain()) map.setTerrain(null);
+  if (map.setProjection) map.setProjection({ type: 'mercator' });
+
   _doStyleSwap(_styleUrl());
+}
+
+function _applyTerrainAndProjection() {
+  const is3D = _mapStyle === 'terrain3d';
+  const isGlobe = _mapStyle === 'globe';
+
+  // Set projection FIRST — before any camera moves — so easeTo never runs under the wrong projection
+  if (map.setProjection) {
+    map.setProjection({ type: isGlobe ? 'globe' : 'mercator' });
+  }
+
+  // Terrain — AWS Terrain Tiles (free, no API key, terrarium encoding)
+  if (is3D) {
+    if (!map.getSource('terrain-dem')) {
+      map.addSource('terrain-dem', {
+        type: 'raster-dem',
+        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+        tileSize: 512, maxzoom: 15, encoding: 'terrarium'
+      });
+    }
+    const sliderEl = document.getElementById('exaggeration-slider');
+    const exaggeration = sliderEl ? parseFloat(sliderEl.value) : 1.5;
+    map.setTerrain({ source: 'terrain-dem', exaggeration });
+    if (!map.getLayer('terrain-hillshade')) {
+      map.addLayer({
+        id: 'terrain-hillshade',
+        type: 'hillshade',
+        source: 'terrain-dem',
+        paint: {
+          'hillshade-exaggeration': 0.75,
+          'hillshade-illumination-direction': 315,
+          'hillshade-illumination-anchor': 'map',
+          'hillshade-shadow-color': '#1a2a35',
+          'hillshade-highlight-color': '#f0f4f8',
+          'hillshade-accent-color': '#2d4a5a',
+        }
+      }, 'waterway');
+    }
+    map.easeTo({ pitch: 50, bearing: 0, duration: 800 });
+  } else {
+    if (map.getTerrain()) map.setTerrain(null);
+    if (map.getLayer('terrain-hillshade')) map.removeLayer('terrain-hillshade');
+    if (isGlobe) {
+      map.setMinZoom(1);
+      map.flyTo({ center: [0, 0], zoom: 2, pitch: 0, bearing: 0, duration: 800 });
+    } else {
+      map.setMinZoom(-2);
+      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    }
+  }
 }
