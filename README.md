@@ -5,18 +5,21 @@
 ![Globe rotation](assets/globe.gif)
 
 <details>
-   <summary>Interface</summary>
-   ![Interface](assets/interface.png)
+<summary>Interface</summary>
+
+![Interface](assets/interface.png)
 </details>
 
 <details>
-   <summary>Dark Map Interaction</summary>
-   ![Dark Map](assets/dark.gif)
+<summary>Dark Map Interaction</summary>
+
+![Dark Map](assets/dark.gif)
 </details>
 
 <details>
-   <summary>Pin a Location</summary>
-   ![Pin a location](assets/pin.gif)
+<summary>Pin a Location</summary>
+
+![Pin a location](assets/pin.gif)
 </details>
 
 ## Quick Start
