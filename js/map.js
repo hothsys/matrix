@@ -463,13 +463,23 @@ async function initMap() {
     zoomEl.id = 'zoom-debug';
     zoomEl.style.cssText = 'position:absolute;bottom:24px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace';
     document.getElementById('map').appendChild(zoomEl);
+    const pitchWrap = document.createElement('div');
+    pitchWrap.style.cssText = 'position:absolute;bottom:24px;left:70px;display:none;align-items:center;gap:4px;z-index:10';
     const pitchEl = document.createElement('div');
     pitchEl.id = 'pitch-debug';
-    pitchEl.style.cssText = 'position:absolute;bottom:24px;left:70px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace;display:none';
-    document.getElementById('map').appendChild(pitchEl);
+    pitchEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;pointer-events:none;font-family:monospace';
+    const resetViewEl = document.createElement('button');
+    resetViewEl.id = 'reset-view-btn';
+    resetViewEl.title = 'Reset to top-down view';
+    resetViewEl.textContent = '⊙';
+    resetViewEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:14px;border:none;border-radius:4px;cursor:pointer;padding:2px 8px;font-family:monospace;display:none;line-height:1';
+    resetViewEl.addEventListener('click', () => { map.easeTo({ bearing: 0, duration: 500 }); });
+    pitchWrap.appendChild(pitchEl);
+    pitchWrap.appendChild(resetViewEl);
+    document.getElementById('map').appendChild(pitchWrap);
     const exaggerationEl = document.createElement('div');
     exaggerationEl.id = 'exaggeration-ctrl';
-    exaggerationEl.style.cssText = 'position:absolute;bottom:20px;left:190px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
+    exaggerationEl.style.cssText = 'position:absolute;bottom:24px;left:310px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
     exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.5" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.5×</span>';
     document.getElementById('map').appendChild(exaggerationEl);
     document.getElementById('exaggeration-slider').addEventListener('input', (e) => {
@@ -481,10 +491,12 @@ async function initMap() {
       zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
       const is3D = _mapStyle === 'terrain3d';
       if (is3D) {
-        pitchEl.style.display = '';
+        pitchWrap.style.display = 'flex';
         pitchEl.textContent = `p${map.getPitch().toFixed(0)}° b${map.getBearing().toFixed(0)}°`;
+        const tilted = Math.abs(map.getBearing()) > 1;
+        resetViewEl.style.display = tilted ? '' : 'none';
       } else {
-        pitchEl.style.display = 'none';
+        pitchWrap.style.display = 'none';
       }
       const exCtrl = document.getElementById('exaggeration-ctrl');
       if (exCtrl) exCtrl.style.display = is3D ? 'flex' : 'none';
@@ -764,6 +776,8 @@ function _applyTerrainAndProjection() {
     const exaggeration = sliderEl ? parseFloat(sliderEl.value) : 1.5;
     map.setTerrain({ source: 'terrain-dem', exaggeration });
     if (!map.getLayer('terrain-hillshade')) {
+      // Insert below the first road/label layer so hillshading shows through
+      const firstSymbol = map.getStyle().layers.find(l => l.type === 'line' || l.type === 'symbol');
       map.addLayer({
         id: 'terrain-hillshade',
         type: 'hillshade',
@@ -776,7 +790,7 @@ function _applyTerrainAndProjection() {
           'hillshade-highlight-color': '#f0f4f8',
           'hillshade-accent-color': '#2d4a5a',
         }
-      }, 'waterway');
+      }, firstSymbol?.id);
     }
     map.easeTo({ pitch: 50, bearing: 0, duration: 800 });
   } else {
