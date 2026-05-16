@@ -173,14 +173,23 @@ function buildClusterIndex() {
     properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || _geoCodeCache[locKey(p)] || null }
   })));
 
-  // Ensure icons exist for all pinned photos
-  representatives.forEach(p => ensurePinIcon(p));
-
-  _animatingMap = false;
-  // Remove cluster DOM markers
-  Object.values(domMarkers).forEach(m => m.remove());
-  domMarkers = {};
-  _refreshClustersNow();
+  // Generate pin icons in batches, yielding between batches to avoid
+  // blocking the main thread with GPU readbacks (getImageData)
+  const ICON_BATCH = 20;
+  let idx = 0;
+  const processIconBatch = () => {
+    const end = Math.min(idx + ICON_BATCH, representatives.length);
+    for (; idx < end; idx++) ensurePinIcon(representatives[idx]);
+    if (idx < representatives.length) {
+      requestAnimationFrame(processIconBatch);
+    } else {
+      _animatingMap = false;
+      Object.values(domMarkers).forEach(m => m.remove());
+      domMarkers = {};
+      _refreshClustersNow();
+    }
+  };
+  processIconBatch();
 }
 
 function refreshClusters() {

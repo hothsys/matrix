@@ -17,6 +17,7 @@ const APP_SHELL = [
   '/js/modals.js',
   '/js/search.js',
   '/js/media.js',
+  '/js/photo-worker.js',
   '/js/data.js',
   '/js/demo.js',
   '/vendor/maplibre-gl.js',

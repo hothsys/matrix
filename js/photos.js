@@ -78,8 +78,8 @@ function rebuildPhotoList() {
     if (b === 'Undated') return -1;
     return a < b ? -1 : 1;
   });
-  list.innerHTML = '';
   _yearEntries = [];
+  const frag = document.createDocumentFragment();
   years.forEach(yr => {
     const group = document.createElement('div');
     group.className = 'year-group';
@@ -91,7 +91,7 @@ function rebuildPhotoList() {
     body.className = 'year-body';
     byYear[yr].forEach(p => body.appendChild(_makeCard(p)));
     group.appendChild(body);
-    list.appendChild(group);
+    frag.appendChild(group);
     const entry = { yr, group };
     hdr.addEventListener('click', () => {
       hdr.classList.toggle('collapsed');
@@ -101,6 +101,8 @@ function rebuildPhotoList() {
     });
     _yearEntries.push(entry);
   });
+  list.innerHTML = '';
+  list.appendChild(frag);
   if (scrollParent) scrollParent.scrollTop = scrollTop;
   _syncCollapseBtn('photos');
 }
@@ -206,11 +208,11 @@ function buildTimeline() {
     (byYear[y][mk][p.date]=byYear[y][mk][p.date]||[]).push(p);
     yearCounts[y]=(yearCounts[y]||0)+1;
   });
-  panel.innerHTML='';
+  const frag = document.createDocumentFragment();
   const tlHdr = document.createElement('div');
   tlHdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between';
   tlHdr.innerHTML = `<div class="section-label">Timeline</div><button class="collapse-all-btn" id="tl-collapse-all" onclick="toggleAllYears('timeline')" title="Collapse/Expand all">▼</button>`;
-  panel.appendChild(tlHdr);
+  frag.appendChild(tlHdr);
   Object.keys(byYear).sort().forEach(yr=>{
     const group = document.createElement('div');
     group.className = 'year-group';
@@ -246,8 +248,10 @@ function buildTimeline() {
       _syncCollapseBtn('timeline');
     });
 
-    panel.appendChild(group);
+    frag.appendChild(group);
   });
+  panel.innerHTML='';
+  panel.appendChild(frag);
   _syncCollapseBtn('timeline');
 }
 function focusTLPhoto(id) {

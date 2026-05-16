@@ -198,7 +198,9 @@ input,textarea,select{font-family:var(--font)}
 @keyframes spin{to{transform:rotate(360deg)}}
 #map-loading{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:var(--bg);opacity:1;transition:opacity .4s ease}
 #map-loading.done{opacity:0;pointer-events:none}
+.map-loading-inner{display:flex;flex-direction:column;align-items:center;gap:14px}
 .map-loading-spinner{width:64px;height:64px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+#map-loading-status{font-size:.72rem;color:var(--muted);letter-spacing:.04em;font-family:var(--font)}
 
 /* MAP STYLE DROPDOWN */
 .style-menu{display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);z-index:50;overflow:hidden;min-width:120px}

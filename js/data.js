@@ -156,7 +156,14 @@ function exportData() {
   setTimeout(() => _doExport(), 50);
 }
 async function _doExport() {
-  const payload = { version: 1, exportedAt: Date.now(), photos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
+  // Strip large binary fields — full-size images are stored on disk by serve.py,
+  // thumbnails are regenerated on import. Including them causes "Invalid string length"
+  // errors on large datasets (>512MB V8 string limit).
+  const exportPhotos = photos.map(p => {
+    const { dataUrl, ...rest } = p;
+    return rest;
+  });
+  const payload = { version: 1, exportedAt: Date.now(), photos: exportPhotos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
   const json = JSON.stringify(payload);
   // Compress with gzip in chunks so we can report real progress
   const encoder = new TextEncoder();
@@ -494,15 +501,24 @@ async function checkAutoRestore() {
 // ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
+function setLoadingStatus(msg) {
+  const el = document.getElementById('map-loading-status');
+  if (el) el.textContent = msg;
+}
+
 async function init() {
-  // Force stale service workers to update immediately
+  // Force stale service workers to update (non-blocking)
   if (navigator.serviceWorker?.controller) {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg) { reg.update().catch(() => {}); }
+    navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
   }
-  await initMap();
+  setLoadingStatus('Loading map…');
+  // Start map + DB load in parallel — they're independent
+  const mapReady = initMap();
+  setLoadingStatus('Loading data…');
   await openDB();
   const [savedPhotos, savedAlbums] = await Promise.all([dbGetAll('photos'), dbGetAll('albums')]);
+  setLoadingStatus('Loading photos…');
+  await mapReady;
   photos.push(...savedPhotos);
   albums.push(...savedAlbums);
   rebuildPhotoMap();
@@ -512,15 +528,20 @@ async function init() {
     if (mapLoading) { mapLoading.classList.add('done'); setTimeout(() => mapLoading.remove(), 400); }
   };
   const ready = () => {
-    buildClusterIndex();
-    if (savedPhotos.length) {
-      fitAll();
-      const realCount = savedPhotos.filter(p => !p.isEmptyPin).length;
-      if (realCount) showToast(`Loaded ${realCount} photo${realCount!==1?'s':''}${savedAlbums.length?` and ${savedAlbums.length} album${savedAlbums.length!==1?'s':''}`:''}`,'success');
-    }
-    dismissSpinner();
+    setLoadingStatus('Placing pins…');
+    // Wait one animation frame so the map is truly ready to accept images
+    requestAnimationFrame(() => {
+      buildClusterIndex();
+      if (savedPhotos.length) {
+        fitAll();
+        const realCount = savedPhotos.filter(p => !p.isEmptyPin).length;
+        if (realCount) showToast(`Loaded ${realCount} photo${realCount!==1?'s':''}${savedAlbums.length?` and ${savedAlbums.length} album${savedAlbums.length!==1?'s':''}`:''}`,'success');
+      }
+      dismissSpinner();
+    });
   };
   // Ensure map is truly ready — use 'idle' which fires after tiles + style are fully rendered
+  setLoadingStatus('Rendering map…');
   const waitForMap = () => {
     if (map.loaded() && map.isStyleLoaded()) { ready(); }
     else { map.once('idle', ready); }
