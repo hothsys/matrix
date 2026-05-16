@@ -150,18 +150,23 @@ async function _decompressGzip(blob) {
 function exportData() {
   document.getElementById('settings-dropdown').classList.remove('open');
   if (!photos.length && !albums.length) { showToast('No data to export','error'); return; }
+  const realPhotos = photos.filter(p => !p.isEmptyPin);
+  const emptyCount = photos.length - realPhotos.length;
+  if (realPhotos.length === 0) { showToast('No photos to export — only empty pins found','error'); return; }
+  if (emptyCount > 0) showToast(`Exporting ${realPhotos.length} photo${realPhotos.length!==1?'s':''} (${emptyCount} empty pin${emptyCount!==1?'s':''} excluded)`, 'info');
   showProg(true);
   updProg(5, 'Preparing data...');
   // Defer the heavy work so the progress bar renders immediately
   setTimeout(() => _doExport(), 50);
 }
 async function _doExport() {
-  // Strip large binary fields — full-size images are stored on disk by serve.py,
-  // thumbnails are regenerated on import. Including them causes "Invalid string length"
-  // errors on large datasets (>512MB V8 string limit).
-  const exportPhotos = photos.map(p => {
+  // Replace base64 dataUrl with the server file path — full-size images live in
+  // matrix-photos/ on disk. On import, the path is resolved back to a data URL.
+  // This avoids "Invalid string length" errors on large datasets (>512MB V8 limit).
+  const exportPhotos = photos.filter(p => !p.isEmptyPin).map(p => {
     const { dataUrl, ...rest } = p;
-    return rest;
+    const ext = (dataUrl && dataUrl.match(/data:image\/(\w+)/)?.[1] === 'png') ? 'png' : 'jpg';
+    return { ...rest, dataUrl: `matrix-photos/${p.id}.${ext}` };
   });
   const payload = { version: 1, exportedAt: Date.now(), photos: exportPhotos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
   const json = JSON.stringify(payload);
