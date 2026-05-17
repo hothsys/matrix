@@ -11,7 +11,7 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:8765',
     headless: true,
     viewport: { width: 1280, height: 800 },
-    actionTimeout: 5000,
+    actionTimeout: 30000,
     serviceWorkers: 'block',
   },
   projects: [

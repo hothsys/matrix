@@ -38,6 +38,13 @@ let labelsVisible = (() => { const v = localStorage.getItem('matrix-labels'); re
 // helpers
 let toastT;
 
+// BUG FIX: Playback state moved here from lightbox.js/playback.js to resolve
+// circular dependency after module refactor (2026-05-16)
+let _playbackActive = false;
+let _playbackStops = [];
+let _playbackIdx = 0;
+let _playbackTimer = null;
+
 function rebuildPhotoMap() { photoMap = new Map(photos.map(p => [p.id, p])); }
 
 function refreshAll(opts = {}) {
