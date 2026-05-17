@@ -204,6 +204,15 @@ The satellite and 3D Terrain views use separate raster tile sources unrelated to
 
 Everything stays **100% local**. No data is sent anywhere except OpenStreetMap/Nominatim for place lookups. No login required.
 
+## Demo Mode
+
+The app includes two automated demos you can trigger with keyboard shortcuts:
+
+| Shortcut | Description |
+|---|---|
+| **Ctrl+Shift+D** | App walkthrough — automated demo with fake cursor that flies around the map, pins locations, switches tabs, and opens photos in lightbox. Demo pins are automatically cleaned up when the demo ends. |
+| **Ctrl+Shift+G** | Globe rotation — switches to globe view and spins it 3 times along the equator. Uses GPU-rendered dots instead of DOM markers for smooth animation without jitter. Press again to stop early. |
+
 ---
 
 Built with [Claude Code](https://claude.ai/claude-code) using Claude Opus 4.6  
