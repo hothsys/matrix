@@ -472,7 +472,7 @@ async function initMap() {
     resetViewEl.id = 'reset-view-btn';
     resetViewEl.title = 'Reset to top-down view';
     resetViewEl.textContent = '⊙';
-    resetViewEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:14px;border:none;border-radius:4px;cursor:pointer;padding:2px 8px;font-family:monospace;display:none;line-height:1';
+    resetViewEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:11px;border:none;border-radius:4px;cursor:pointer;padding:3px 6px;font-family:monospace;display:none;box-sizing:border-box;height:19px';
     resetViewEl.addEventListener('click', () => { map.easeTo({ bearing: 0, duration: 500 }); });
     pitchWrap.appendChild(pitchEl);
     pitchWrap.appendChild(resetViewEl);
@@ -480,7 +480,7 @@ async function initMap() {
     const exaggerationEl = document.createElement('div');
     exaggerationEl.id = 'exaggeration-ctrl';
     exaggerationEl.style.cssText = 'position:absolute;bottom:24px;left:310px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
-    exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.5" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.5×</span>';
+    exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.2" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.2×</span>';
     document.getElementById('map').appendChild(exaggerationEl);
     document.getElementById('exaggeration-slider').addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
@@ -614,9 +614,13 @@ async function initMap() {
     // Elevation — only in 3D Terrain mode
     let elevationStr = '';
     if (_mapStyle === 'terrain3d') {
-      const elev = map.queryTerrainElevation([lng, lat]);
-      if (elev !== null && elev !== undefined) {
-        elevationStr = `${Math.round(elev).toLocaleString()}m`;
+      try {
+        const elev = map.queryTerrainElevation([lng, lat]);
+        if (elev !== null && elev !== undefined) {
+          elevationStr = `${Math.round(elev).toLocaleString()}m`;
+        }
+      } catch(e) {
+        // Elevation error when zoom exceeds source maxzoom — ignore
       }
     }
 
@@ -760,6 +764,15 @@ function _applyTerrainAndProjection() {
 
   // Set projection FIRST — before any camera moves — so easeTo never runs under the wrong projection
   if (map.setProjection) {
+      // Add atmospheric fog for depth perception in 3D modes
+      if (map.setFog) {
+        map.setFog({
+          color: 'white',
+          'high-color': '#add8e6',
+          'horizon-blend': 0.3,
+          atmosphere: 0.5
+        });
+      }
     map.setProjection({ type: isGlobe ? 'globe' : 'mercator' });
   }
 
@@ -769,12 +782,17 @@ function _applyTerrainAndProjection() {
       map.addSource('terrain-dem', {
         type: 'raster-dem',
         tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-        tileSize: 512, maxzoom: 15, encoding: 'terrarium'
+        tileSize: 512, maxzoom: 17, encoding: 'terrarium'
       });
     }
     const sliderEl = document.getElementById('exaggeration-slider');
-    const exaggeration = sliderEl ? parseFloat(sliderEl.value) : 1.5;
+    const exaggeration = sliderEl ? parseFloat(sliderEl.value) : 1.2;
     map.setTerrain({ source: 'terrain-dem', exaggeration });
+      map.setPaintProperty('terrain-dem', 'raster-blur', 3);
+        // Add sky layer for atmospheric background in 3D
+        if (map.getLayer('sky') === undefined) {
+          map.addLayer({ id: 'sky', type: 'sky', paint: { 'sky-type': 'gradient', 'sky-gradient': ['interpolate', ['linear'], ['sky-radial-progress'], 0, 'rgba(255,255,255,0)', 0.5, '#87cefa', 1, '#4682b4'] } });
+        }
     if (!map.getLayer('terrain-hillshade')) {
       // Insert below the first road/label layer so hillshading shows through
       const firstSymbol = map.getStyle().layers.find(l => l.type === 'line' || l.type === 'symbol');
@@ -783,14 +801,30 @@ function _applyTerrainAndProjection() {
         type: 'hillshade',
         source: 'terrain-dem',
         paint: {
-          'hillshade-exaggeration': 0.75,
-          'hillshade-illumination-direction': 315,
-          'hillshade-illumination-anchor': 'map',
+          'hillshade-exaggeration': 1.0,
+          'hillshade-illumination-direction': 270,
+          'hillshade-illumination-anchor': 'viewport',
           'hillshade-shadow-color': '#1a2a35',
           'hillshade-highlight-color': '#f0f4f8',
           'hillshade-accent-color': '#2d4a5a',
         }
       }, firstSymbol?.id);
+        // Add 3D building extrusion if OpenMapTiles source is present
+        if (map.getSource('openmaptiles') && !map.getLayer('3d-buildings')) {
+          map.addLayer({
+            id: '3d-buildings',
+            source: 'openmaptiles',
+            'source-layer': 'building',
+            type: 'fill-extrusion',
+            minzoom: 15,
+            paint: {
+              'fill-extrusion-color': '#ddd',
+              'fill-extrusion-height': ['get', 'height'],
+              'fill-extrusion-base': ['get', 'min_height'],
+              'fill-extrusion-opacity': 0.6
+            }
+          }, 'terrain-hillshade');
+        }
     }
     map.easeTo({ pitch: 50, bearing: 0, duration: 800 });
   } else {
