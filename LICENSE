@@ -20,11 +20,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 ## Third-Party Licenses
 
 This project includes the following third-party software:
 
-### MapLibre GL JS (v4.5.0)
+### MapLibre GL JS (v5.24.0)
 - License: 3-Clause BSD
 - Copyright: MapLibre contributors
 - https://github.com/maplibre/maplibre-gl-js
@@ -33,10 +34,6 @@ This project includes the following third-party software:
 - License: ISC
 - Copyright: Mapbox
 - https://github.com/mapbox/supercluster
-
-### exif-js (v2.3.0)
-- License: MIT
-- https://github.com/exif-js/exif-js
 
 ### Josefin Sans (Google Fonts)
 - License: SIL Open Font License 1.1

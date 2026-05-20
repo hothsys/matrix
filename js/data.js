@@ -145,6 +145,31 @@ async function _decompressGzip(blob) {
 }
 
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// EMPTY MAP CACHE
+// ═══════════════════════════════════════
+async function emptyTileCache() {
+  document.getElementById('settings-dropdown').classList.remove('open');
+  // Confirm before wiping — this deletes all cached tiles from the matrix-tiles directory
+  if (!confirm("Are you sure you want to empty the map tile cache?\n\nThis will delete all cached tiles in the 'matrix-tiles' directory. Tiles will be re-downloaded as you browse.")) return;
+  try {
+    const r = await fetch('/api/tiles/clear', { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      // Also flush the SW Cache API (L1) so stale tiles aren't served from browser cache
+      const cacheNames = await caches.keys();
+      const tileCacheName = cacheNames.find(n => n.endsWith('-tiles'));
+      if (tileCacheName) await caches.delete(tileCacheName);
+      showToast(`Map cache cleared — ${d.removed} file${d.removed !== 1 ? 's' : ''} removed`, 'success');
+    } else {
+      showToast('Failed to clear map cache', 'error');
+    }
+  } catch {
+    showToast('Cache clear failed — is serve.py running?', 'error');
+  }
+}
+
+// ═══════════════════════════════════════
 // EXPORT DATA
 // ═══════════════════════════════════════
 function exportData() {
