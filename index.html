@@ -8,7 +8,6 @@
 <link href="vendor/maplibre-gl.css" rel="stylesheet" />
 <script src="vendor/maplibre-gl.js"></script>
 <script src="vendor/supercluster.min.js"></script>
-<script src="vendor/exif.js"></script>
 <link href="css/styles.css" rel="stylesheet" />
 </head>
 <body>
@@ -33,6 +32,10 @@
         <div class="settings-item" id="autosave-menu-item">
           <span class="settings-item-icon">💾</span>
           <div><div class="settings-item-label">Auto-Save</div><div class="settings-item-sub" id="autosave-menu-status">Checking...</div></div>
+        </div>
+        <div class="settings-item" onclick="emptyTileCache()">
+          <span class="settings-item-icon">🗺</span>
+          <div><div class="settings-item-label">Empty Map Cache</div><div class="settings-item-sub">Clear cached map tiles from disk</div></div>
         </div>
       </div>
     </div>

@@ -17,14 +17,6 @@
         "supercluster.min.js": "https://unpkg.com/supercluster@{{version}}/dist/supercluster.min.js"
       },
       "registry": "npm"
-    },
-    {
-      "name": "exif-js",
-      "version": "2.3.0",
-      "files": {
-        "exif.js": "https://cdnjs.cloudflare.com/ajax/libs/exif-js/{{version}}/exif.js"
-      },
-      "registry": "npm"
     }
   ]
 }

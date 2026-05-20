@@ -50,27 +50,27 @@
 
 | Feature | Detail |
 |---|---|
-| 📍 Auto-pin | Reads GPS EXIF data — no manual coordinates needed |
-| 🔎 Destination search | Search for any place and pin photos to it |
-| 🖱 Right-click pin | Right-click anywhere on the map to pin a location |
-| 🏳 Countries visited | Shows flag emojis for all countries you've pinned photos in |
-| 📁 Albums | Organise photos into named albums with date ranges |
-| 🗓 Timeline | Browse pinned photos chronologically |
-| 🖼 Lightbox | Full-size photo viewer with smooth navigation animations |
-| 📝 Notes | Add notes to any pin location |
-| 🛰 Map styles | Light, Dark, Terrain, 3D Terrain, Satellite, and Globe |
-| 🗺 Vector tiles | Smooth zoom with no tile flickering (OpenFreeMap Liberty) |
-| 🔄 Clustering | Nearby pins cluster automatically, expand on zoom |
-| 💾 Auto-save | Automatic backup to disk when running via `serve.py` |
-| 📦 Export / Import | Download or restore your full dataset as compressed `.json.gz` |
-| 🎬 Video export | Export trip animations as WebM video (VP9 codec) |
-| 📡 Offline mode | Browse photos and cached map tiles without internet |
+| 📍 Auto-pin | GPS EXIF read — no manual coordinates needed |
+| 🔎 Destination search | Search any place and drop a pin |
+| 🖱 Right-click pin | Right-click the map to pin a location |
+| 🏳 Countries visited | Flag emojis for every country you've visited |
+| 📁 Albums | Named albums with optional date ranges |
+| 🗓 Timeline | Chronological photo browser |
+| 🖼 Lightbox | Full-size viewer with navigation and camera info |
+| 📝 Notes | Add notes to any pin |
+| 🛰 Map styles | Light, Dark, Terrain, 3D Terrain, Satellite, Globe |
+| 🗺 Vector tiles | Smooth zoom, no flickering (OpenFreeMap) |
+| 🔄 Clustering | Pins cluster by zoom, expand on click |
+| 💾 Auto-save | Background backup to disk via `serve.py` |
+| 📦 Export / Import | Full dataset as compressed `.json.gz` |
+| 🎬 Video export | Trip animation as WebM video (VP9) |
+| 📡 Offline mode | Browse photos and cached tiles without internet |
 
 ## Auto-save & Persistence
 
 - **IndexedDB** — all photos, albums, and metadata persist in the browser across sessions.
 - **serve.py auto-save** — when running with the local server, data is also saved to `matrix-data.json` and photos to `matrix-photos/` on disk. This provides a durable backup that survives browser data clearing.
-- **Export/Import** — use the settings menu to export your data as a gzip-compressed `.json.gz` file or import a backup. Importing supports both compressed (`.json.gz`) and plain (`.json`) files.
+- **Export/Import** — use the settings menu to export your data as a gzip-compressed `.json.gz` file or import a backup. Importing supports both compressed (`.json.gz`) and plain (`.json`) files. Empty location pins are excluded from exports automatically. To migrate between machines, copy both the `.json.gz` export and the `matrix-photos/` directory to the new machine, then import.
 
 ## Tile Caching
 
@@ -148,6 +148,21 @@ The app works offline after your first visit:
 - **Destination search and geocoding** require internet — they show a friendly message when offline
 - An **orange banner** appears at the top when you're offline
 - When you reconnect, everything resumes automatically — no action needed
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `L` | Switch to Light Map |
+| `B` | Switch to Bright Map |
+| `D` | Switch to Dark Map |
+| `T` | Switch to Terrain |
+| `3` | Switch to 3D Terrain |
+| `S` | Switch to Satellite |
+| `G` | Switch to Globe |
+| `F` | Fit all pins into view |
+
+> Shortcuts are disabled when typing in any input field.
 
 ## Tips
 

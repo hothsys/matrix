@@ -199,18 +199,6 @@ function _patchStyleWater(styleObj) {
   return styleObj;
 }
 
-// Runtime fallback for initial load where style is loaded by URL (not patched JSON).
-function applyWaterStyles() {
-  if (_mapStyle === 'satellite') return;
-  const color = _mapStyle === 'dark' ? '#6a9fd8' : '#2c5f8a';
-  const waterLabelIds = ['water_name', 'water_name_point_label', 'water_name_line_label'];
-  for (const id of waterLabelIds) {
-    if (!map.getLayer(id)) continue;
-    map.setPaintProperty(id, 'text-halo-width', 0);
-    map.setPaintProperty(id, 'text-color', color);
-    map.setLayoutProperty(id, 'visibility', 'visible');
-  }
-}
 
 // Reduce label sizes at low zoom levels (z1-6) to prevent oversized text on world view.
 // Captures each layer's original text-size and applies a zoom-dependent scale reduction.

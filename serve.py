@@ -205,18 +205,19 @@ def ensure_photos_dir():
 
 _evict_lock = threading.Lock()
 
-def _evict_tiles_if_needed():
-    """Remove oldest tiles when disk cache exceeds MAX_TILES_MB."""
+def _evict_tiles_if_needed(force=False):
+    """Remove oldest tiles when disk cache exceeds MAX_TILES_MB.
+    When force=True, removes all tiles regardless of size (manual cache clear)."""
     if not _evict_lock.acquire(blocking=False):
-        return  # Another eviction is running
+        return 0  # Another eviction is running
     try:
         if not os.path.isdir(TILES_DIR):
-            return
+            return 0
         files = []
         total = 0
         for root, _, fnames in os.walk(TILES_DIR):
             for fn in fnames:
-                if fn.endswith('.tmp'):
+                if fn.endswith('.tmp') or fn.startswith('.'):
                     continue
                 fp = os.path.join(root, fn)
                 try:
@@ -226,15 +227,18 @@ def _evict_tiles_if_needed():
                 except OSError:
                     pass
         limit = MAX_TILES_MB * 1024 * 1024
-        if total <= limit:
-            return
+        if not force and total <= limit:
+            return 0
         before_mb = total / (1024 * 1024)
-        _req_logger.info(f'TILE EVICTION: cache at {before_mb:.1f}MB exceeds {MAX_TILES_MB}MB limit, beginning eviction')
+        if force:
+            _req_logger.info(f'TILE EVICTION: forced cache clear, removing all {len(files)} files ({before_mb:.1f}MB)')
+        else:
+            _req_logger.info(f'TILE EVICTION: cache at {before_mb:.1f}MB exceeds {MAX_TILES_MB}MB limit, beginning eviction')
         # Sort by modification time (oldest first) and evict
         files.sort()
         evicted = 0
         for mtime, size, fp in files:
-            if total <= limit * 0.8:  # Evict down to 80% to avoid thrashing
+            if not force and total <= limit * 0.8:  # Evict down to 80% to avoid thrashing
                 break
             try:
                 os.remove(fp)
@@ -245,6 +249,23 @@ def _evict_tiles_if_needed():
         after_mb = total / (1024 * 1024)
         if evicted:
             _req_logger.info(f'TILE EVICTION: removed {evicted} files, {before_mb:.1f}MB → {after_mb:.1f}MB (limit {MAX_TILES_MB}MB)')
+        # Remove empty directories left behind after eviction (e.g. old versioned tile sets
+        # like 20260422_001001_pt that are no longer needed after their tiles were evicted).
+        # Walk bottom-up so child dirs are removed before parents.
+        for root, dirs, fnames in os.walk(TILES_DIR, topdown=False):
+            if root == TILES_DIR:
+                continue  # Never remove TILES_DIR itself
+            real_files = [f for f in fnames if not f.startswith('.')]
+            if not real_files and not dirs:
+                # Remove hidden files (.DS_Store etc.) before rmdir
+                for hf in fnames:
+                    try: os.remove(os.path.join(root, hf))
+                    except OSError: pass
+                try:
+                    os.rmdir(root)
+                except OSError:
+                    pass
+        return evicted
     finally:
         _evict_lock.release()
 
@@ -306,6 +327,9 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         try:
+            if self.path.rstrip('/') == '/api/tiles/clear':
+                self._clear_tile_cache()
+                return
             m = PHOTO_RE.match(self.path)
             if m and not m.group(2):
                 self._delete_photo(m.group(1))
@@ -583,6 +607,31 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
+
+    def _clear_tile_cache(self):
+        """Wipe the entire matrix-tiles directory and recreate it empty for a clean state."""
+        try:
+            removed = 0
+            if os.path.isdir(TILES_DIR):
+                # Count files before wiping (excluding hidden files)
+                for root, _, fnames in os.walk(TILES_DIR):
+                    removed += sum(1 for f in fnames if not f.startswith('.'))
+                shutil.rmtree(TILES_DIR)
+            os.makedirs(TILES_DIR, exist_ok=True)
+            _req_logger.info(f'TILE CACHE CLEARED: wiped matrix-tiles directory ({removed} files removed)')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'ok': True, 'removed': removed}).encode())
+        except Exception as e:
+            print(f'Error clearing tile cache: {e}')
+            try:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'ok': False, 'error': str(e)}).encode())
+            except Exception:
+                pass
 
     def log_message(self, format, *args):
         _req_logger.info(format % args)
