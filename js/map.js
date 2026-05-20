@@ -4,9 +4,11 @@
 function _styleUrl() {
   if (_mapStyle === 'satellite') return STYLE_SAT;
   if (_mapStyle === 'dark') return STYLE_DARK;
+  if (_mapStyle === 'bright') return STYLE_BRIGHT;
   return STYLE_STREET; // light, enriched, terrain3d, globe all use Liberty as base
 }
 const STYLE_STREET = 'https://tiles.openfreemap.org/styles/liberty';
+const STYLE_BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
 const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const STYLE_SAT = {
   version:8,
@@ -94,6 +96,10 @@ function _patchStyleBoundaries(styleObj) {
 // - Sets ocean fill color for light mode
 function _patchStyleWater(styleObj) {
   if (!styleObj || !styleObj.layers) return styleObj;
+  // Remove unsupported layer types that cause MapLibre v5 validation errors
+  styleObj.layers = styleObj.layers.filter(l => l.type !== 'sky');
+  if (styleObj.sky) delete styleObj.sky;
+  if (styleObj.terrain) delete styleObj.terrain;
   // Strip natural-earth terrain raster in Light Map (not enriched) to speed up rendering
   if (_mapStyle === 'light') {
     styleObj.layers = styleObj.layers.filter(l => l.id !== 'natural_earth');
@@ -101,11 +107,13 @@ function _patchStyleWater(styleObj) {
   }
   // Apple Maps Dark palette — neutral dark land, distinctly blue water.
   // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
-  if (_mapStyle === 'dark') {
+  if (_mapStyle === 'dark' || _mapStyle === 'terrain3d') {
+    // Darker water for both Dark Map and 3D Terrain modes
+    const waterColor = _mapStyle === 'terrain3d' ? '#1a2e3d' : '#131619';
     for (const layer of styleObj.layers) {
       if (!layer.paint) layer.paint = {};
       if (layer.type === 'fill' && /^water/.test(layer.id)) {
-        layer.paint['fill-color'] = '#131619';
+        layer.paint['fill-color'] = waterColor;
       }
     }
   }
@@ -299,12 +307,18 @@ function addPinLayers() {
     try { openPinPopup(lat, lng); } catch(err) { console.error(err); }
     const isEmpty = f.properties.iconId === 'pin-empty';
     if (!isEmpty) {
-      const targetZoom = Math.max(map.getZoom(), 14);
+      // Zoom in by at most 4 levels from current zoom, capped at 14
+      // Prevents a jarring jump from low zoom levels (e.g. zoom 3 → 14)
+      const targetZoom = Math.min(Math.max(map.getZoom(), map.getZoom() + 4), 14);
       const needsZoom = map.getZoom() < targetZoom;
       const dist = Math.hypot(map.getCenter().lng - lng, map.getCenter().lat - lat);
       const alreadyThere = dist < 0.005 && !needsZoom;
       if (!alreadyThere) {
+        // In 3D Terrain (pitched view), offset the focal point downward in screen space
+        // so the pin appears in the visible ground area rather than drifting off-screen
+        const pitchOffset = _mapStyle === 'terrain3d' ? [0, Math.round(map.transform?.height * 0.15 || 100)] : [0, 0];
         map.flyTo({ center: [lng, lat], zoom: targetZoom, speed: 0.8, curve: 1.0, essential: true,
+          offset: pitchOffset,
           easing: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2 });
       }
     }
@@ -318,7 +332,7 @@ function addPinLayers() {
 // ═══════════════════════════════════════
 function initTheme() {
   const stored = localStorage.getItem('matrix-theme');
-  if (stored && ['dark', 'light', 'enriched', 'terrain3d', 'globe'].includes(stored)) {
+  if (stored && ['dark', 'light', 'bright', 'enriched', 'terrain3d', 'globe'].includes(stored)) {
     _mapStyle = stored;
   } else {
     _mapStyle = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -330,8 +344,9 @@ function applyTheme() {
   _tileTemplatesCache = null;
   // Set initial button label
   const btn = document.getElementById('tb-style-btn');
-  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
+
   // Set initial active state in menu
   document.querySelectorAll('.style-menu-item').forEach(el => el.classList.toggle('active', el.dataset.style === _mapStyle));
   // Disable Export Video in Globe mode
@@ -429,7 +444,13 @@ async function initMap() {
   const otherUrl = styleUrl === STYLE_DARK ? STYLE_STREET : STYLE_DARK;
   fetch(otherUrl).then(r => r.json()).then(j => { _styleJsonCache[otherUrl] = j; }).catch(() => {});
   map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, maxTileCacheSize:200, canvasContextAttributes:{ preserveDrawingBuffer:true } });
-  map.on('error', (e) => console.error('MapLibre error:', e.error?.message || e.message || e));
+  // Suppress non-critical style validation errors (sky/terrain-dem references in
+  // unpatched style JSON when the pre-fetch falls back to URL loading)
+  const _suppressedErrors = /sky|terrain-dem|non-existing layer|same source.*hillshade/i;
+  map.on('error', (e) => {
+    const msg = e.error?.message || e.message || '';
+    if (!_suppressedErrors.test(msg)) console.error('MapLibre error:', msg);
+  });
   map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
   // Recover from WebGL context loss (Safari loses context after sleep or memory pressure)
   const canvas = map.getCanvas();
@@ -464,15 +485,16 @@ async function initMap() {
     zoomEl.style.cssText = 'position:absolute;bottom:24px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace';
     document.getElementById('map').appendChild(zoomEl);
     const pitchWrap = document.createElement('div');
-    pitchWrap.style.cssText = 'position:absolute;bottom:24px;left:70px;display:none;align-items:center;gap:4px;z-index:10';
-    const pitchEl = document.createElement('div');
+    pitchWrap.id = 'pitch-wrap';
+    pitchWrap.style.cssText = 'position:absolute;bottom:24px;left:70px;display:none;align-items:center;z-index:10;background:rgba(0,0,0,.6);border-radius:4px;font-family:monospace;font-size:11px;color:#fff';
+    const pitchEl = document.createElement('span');
     pitchEl.id = 'pitch-debug';
-    pitchEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;pointer-events:none;font-family:monospace';
+    pitchEl.style.cssText = 'padding:2px 6px;pointer-events:none';
     const resetViewEl = document.createElement('button');
     resetViewEl.id = 'reset-view-btn';
-    resetViewEl.title = 'Reset to top-down view';
+    resetViewEl.title = 'Reset north';
     resetViewEl.textContent = '⊙';
-    resetViewEl.style.cssText = 'background:rgba(0,0,0,.6);color:#fff;font-size:11px;border:none;border-radius:4px;cursor:pointer;padding:3px 6px;font-family:monospace;display:none;box-sizing:border-box;height:19px';
+    resetViewEl.style.cssText = 'background:none;color:#fff;font-size:15px;border:none;border-left:1px solid rgba(255,255,255,.2);cursor:pointer;padding:0 6px;font-family:monospace;display:none;line-height:1';
     resetViewEl.addEventListener('click', () => { map.easeTo({ bearing: 0, duration: 500 }); });
     pitchWrap.appendChild(pitchEl);
     pitchWrap.appendChild(resetViewEl);
@@ -487,6 +509,16 @@ async function initMap() {
       document.getElementById('exaggeration-val').textContent = val.toFixed(1) + '×';
       if (map.getTerrain()) map.setTerrain({ source: 'terrain-dem', exaggeration: val });
     });
+    // Live GPS coordinates on mouse move
+    const coordsEl = document.createElement('div');
+    coordsEl.id = 'coords-debug';
+    coordsEl.style.cssText = 'position:absolute;bottom:24px;right:50px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace;display:none';
+    document.getElementById('map').appendChild(coordsEl);
+    map.on('mousemove', (e) => {
+      coordsEl.textContent = `${e.lngLat.lat.toFixed(4)}°, ${e.lngLat.lng.toFixed(4)}°`;
+      coordsEl.style.display = '';
+    });
+    map.getCanvas().addEventListener('mouseout', () => { coordsEl.style.display = 'none'; });
     const updateZoom = () => {
       zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
       const is3D = _mapStyle === 'terrain3d';
@@ -740,7 +772,7 @@ function setMapStyle(mode) {
   }
 
   // Update button label
-  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   const btn = document.getElementById('tb-style-btn');
   if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
 
@@ -778,11 +810,19 @@ function _applyTerrainAndProjection() {
 
   // Terrain — AWS Terrain Tiles (free, no API key, terrarium encoding)
   if (is3D) {
+    // Use separate sources for terrain mesh and hillshade to improve rendering quality
     if (!map.getSource('terrain-dem')) {
       map.addSource('terrain-dem', {
         type: 'raster-dem',
         tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-        tileSize: 512, maxzoom: 17, encoding: 'terrarium'
+        tileSize: 512, maxzoom: 15, encoding: 'terrarium'
+      });
+    }
+    if (!map.getSource('hillshade-dem')) {
+      map.addSource('hillshade-dem', {
+        type: 'raster-dem',
+        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+        tileSize: 512, maxzoom: 15, encoding: 'terrarium'
       });
     }
     const sliderEl = document.getElementById('exaggeration-slider');
@@ -799,7 +839,7 @@ function _applyTerrainAndProjection() {
       map.addLayer({
         id: 'terrain-hillshade',
         type: 'hillshade',
-        source: 'terrain-dem',
+        source: 'hillshade-dem',
         paint: {
           'hillshade-exaggeration': 1.0,
           'hillshade-illumination-direction': 270,
@@ -835,7 +875,7 @@ function _applyTerrainAndProjection() {
       map.flyTo({ center: [0, 0], zoom: 2, pitch: 0, bearing: 0, duration: 800 });
     } else {
       map.setMinZoom(-2);
-      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      map.jumpTo({ pitch: 0, bearing: 0 });
     }
   }
 }

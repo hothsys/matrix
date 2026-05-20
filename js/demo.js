@@ -5,9 +5,24 @@
 
 // Ctrl+Shift+D — automated app walkthrough with fake cursor
 // Ctrl+Shift+G — globe rotation demo
+// L/D/T/3/S/G — map style shortcuts  F — fit all pins
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'D') { e.preventDefault(); runDemo(); }
   if (e.ctrlKey && e.shiftKey && e.key === 'G') { e.preventDefault(); runGlobeDemo(); }
+
+  // Map style + navigation shortcuts — skip when typing in inputs or using modifier keys
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  switch (e.key) {
+    case 'l': case 'L': setMapStyle('light'); break;
+    case 'b': case 'B': setMapStyle('bright'); break;
+    case 'd': case 'D': setMapStyle('dark'); break;
+    case 't': case 'T': setMapStyle('enriched'); break;
+    case '3': setMapStyle('terrain3d'); break;
+    case 's': case 'S': setMapStyle('satellite'); break;
+    case 'g': case 'G': setMapStyle('globe'); break;
+    case 'f': case 'F': fitAll(); break;
+  }
 });
 
 // ═══════════════════════════════════════
