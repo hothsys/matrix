@@ -51,7 +51,7 @@ input,textarea,select{font-family:var(--font)}
 #countries-bar{display:none;margin:0 14px 7px;padding:6px 10px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);flex-shrink:0;text-align:center}
 #countries-bar .cb-label{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
 #countries-bar .cb-status{font-size:.68rem;color:var(--text);height:1.1em;margin-top:10px;transition:opacity .15s;opacity:.5}
-#countries-bar .cb-flags{font-size:.8rem;letter-spacing:2px;line-height:1.4;overflow:hidden}
+#countries-bar .cb-flags{font-size:1rem;letter-spacing:2px;line-height:1.4;overflow:hidden}
 #countries-bar .cb-flags span{cursor:default;transition:transform .1s}
 #countries-bar .cb-flags span:hover{transform:scale(1.25)}
 #countries-bar .cb-flags.collapsed{max-height:2.8em}
@@ -170,6 +170,7 @@ input,textarea,select{font-family:var(--font)}
 #esri-attribution{display:none;position:absolute;bottom:6px;left:6px;background:rgba(30,30,30,.6);color:#aaa;font-size:.55rem;padding:2px 6px;border-radius:4px;z-index:2;pointer-events:auto}
 #esri-attribution a{color:var(--accent);text-decoration:none}
 #map.sat-mode~#esri-attribution{display:block}
+.maplibregl-ctrl-bottom-right{bottom:16px!important;right:2px!important}
 .maplibregl-ctrl-group{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:10px!important;overflow:hidden;box-shadow:var(--shadow)!important}
 .maplibregl-ctrl-group button{background:var(--surface)!important;border-bottom:1px solid var(--border)!important}
 .maplibregl-ctrl-group button:hover{background:var(--surface2)!important}
