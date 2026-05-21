@@ -39,6 +39,7 @@ function showLbPhoto(animate=false){
     img.style.transform='scale(.97)';
     cap.style.opacity='0';
     setTimeout(()=>{
+      const imgSrc = p.dataUrl && !p.dataUrl.startsWith('data:') ? `/${p.dataUrl}` : p.dataUrl;
       const next = new Image();
       next.onload = () => {
         img.src = next.src;
@@ -49,20 +50,31 @@ function showLbPhoto(animate=false){
           cap.style.opacity='1';
         });
       };
-      next.src = p.dataUrl;
+      next.src = imgSrc;
     },180);
   } else {
-    // Clear stale image immediately to prevent a flash of the previous photo,
-    // then preload the new image and restore once decoded.
+    // Clear stale image and show spinner while the new photo loads
     img.style.opacity='0';
     img.removeAttribute('src');
     cap.textContent = caption;
+    // Show loading spinner in lightbox while photo fetches from disk
+    let lbSpinner = document.getElementById('lb-spinner');
+    if (!lbSpinner) {
+      lbSpinner = document.createElement('div');
+      lbSpinner.id = 'lb-spinner';
+      lbSpinner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;z-index:1';
+      document.getElementById('lightbox').appendChild(lbSpinner);
+    }
+    lbSpinner.style.display = 'block';
+    const imgSrc = p.dataUrl && !p.dataUrl.startsWith('data:') ? `/${p.dataUrl}` : p.dataUrl;
     const next = new Image();
     next.onload = () => {
       img.src = next.src;
+      if (lbSpinner) lbSpinner.style.display = 'none';
       requestAnimationFrame(() => { img.style.opacity='1'; });
     };
-    next.src = p.dataUrl;
+    next.onerror = () => { if (lbSpinner) lbSpinner.style.display = 'none'; };
+    next.src = imgSrc;
   }
   highlightCard(p.id);
 }
