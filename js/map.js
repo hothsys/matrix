@@ -654,7 +654,7 @@ async function initMap() {
     const displayName = country && country !== placeName ? `${placeName}, ${country}` : placeName;
     const popup = new maplibregl.Popup({ maxWidth: '240px', closeButton: true, offset: 30 })
       .setLngLat([lng, lat])
-      .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(displayName)}</div>${elevationStr ? `<div class="dest-popup-detail">⛰ ${elevationStr} elevation</div>` : ''}<button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button></div>`)
+      .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(displayName)}</div>${elevationStr ? `<div class="dest-popup-detail">⛰ ${elevationStr} elevation</div>` : ''}<button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button><div class="dest-popup-coords">${lat.toFixed(3)}, ${lng.toFixed(3)}</div></div>`)
       .addTo(map);
     popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
 

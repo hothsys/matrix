@@ -90,6 +90,46 @@ function renderSearchResults(data) {
   });
 }
 
+// Reverse geocode GPS coordinates — returns a single result formatted
+// identically to forward search so it renders in the same dropdown
+async function runReverseGeoSearch(lat, lng) {
+  try {
+    const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
+    if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));
+    _lastNominatimCall = Date.now();
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=en`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if (d.error) {
+      dLoading.style.display = 'none';
+      dResults.innerHTML = '<div style="padding:9px 12px;font-size:.73rem;color:var(--muted)">No results for these coordinates</div>';
+      return;
+    }
+    // Build a meaningful display_name from address fields — Nominatim reverse often
+    // returns a street number as the first element which isn't useful for navigation
+    const a = d.address || {};
+    // Pick the most meaningful name — landmark/POI first, then road, then area
+    const mainName = d.name || a.tourism || a.building || a.amenity || a.leisure || a.road || a.suburb || a.neighbourhood || a.city || a.town || a.village || a.state || d.display_name.split(',')[0];
+    const city = a.city || a.town || a.village || '';
+    const country = a.country || '';
+    const displayParts = [mainName, city, country].filter((v, i, arr) => v && arr.indexOf(v) === i);
+    const displayName = displayParts.join(', ');
+
+    const result = [{
+      display_name: displayName,
+      lat: String(lat),
+      lon: String(lng),
+      address: a
+    }];
+    _searchCache[`${lat},${lng}`] = result;
+    renderSearchResults(result);
+  } catch (err) {
+    console.warn('Reverse geo search failed:', err);
+    dLoading.style.display = 'none';
+    dResults.innerHTML = '<div style="padding:9px 12px;font-size:.73rem;color:var(--accent2)">Coordinate lookup failed — try again</div>';
+  }
+}
+
 async function runDestSearch(q) {
   if (_isOffline) {
     dResults.style.display='block'; dLoading.style.display='none';
@@ -98,6 +138,20 @@ async function runDestSearch(q) {
   }
   dResults.style.display='block'; dLoading.style.display='block';
   dResults.querySelectorAll('.dest-item').forEach(el=>el.remove());
+
+  // Detect GPS coordinate input (e.g. "48.8566, 2.3522" or "48.8566° N, 2.3522° E")
+  const coordMatch = q.trim().match(/^(-?\d+\.?\d*)[°\s]*[NSns]?\s*,\s*(-?\d+\.?\d*)[°\s]*[EWew]?$/);
+  if (coordMatch) {
+    let lat = parseFloat(coordMatch[1]), lng = parseFloat(coordMatch[2]);
+    // Handle S/W suffixes making coords negative
+    if (/[Ss]/.test(q)) lat = -Math.abs(lat);
+    if (/[Ww]/.test(q)) lng = -Math.abs(lng);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      await runReverseGeoSearch(lat, lng);
+      return;
+    }
+  }
+
   const zoom = map ? map.getZoom() : 0;
   const cacheKey = q + (zoom >= 3 ? `@${map.getCenter().lng.toFixed(1)},${map.getCenter().lat.toFixed(1)}` : '');
   if (_searchCache[cacheKey]) { renderSearchResults(_searchCache[cacheKey]); return; }
@@ -166,7 +220,7 @@ function flyTo(item) {
   });
   const popup=new maplibregl.Popup({maxWidth:'240px',closeButton:true,offset:30})
     .setLngLat([lng,lat])
-    .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(main)}</div><div class="dest-popup-detail">${esc(detail)}</div><button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button></div>`)
+    .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(main)}</div><div class="dest-popup-detail">${esc(detail)}</div><button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button><div class="dest-popup-coords">${lat.toFixed(3)}, ${lng.toFixed(3)}</div></div>`)
     .addTo(map);
   popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
   destMarkerObj={marker,popup};
@@ -211,7 +265,7 @@ function reopenDestPopup(){
   const detail = country || '';
   const popup = new maplibregl.Popup({maxWidth:'240px',closeButton:true,offset:30})
     .setLngLat([lng,lat])
-    .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(main)}</div><div class="dest-popup-detail">${esc(detail)}</div><button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button></div>`)
+    .setHTML(`<div class="dest-popup"><div class="dest-popup-name">${esc(main)}</div><div class="dest-popup-detail">${esc(detail)}</div><button class="dest-popup-btn" onclick="openPinPickerAt(${lat},${lng})">＋ Add photos to this location</button><button class="dest-popup-btn" onclick="pinEmptyLocation(${lat},${lng})">📌 Pin this location</button><div class="dest-popup-coords">${lat.toFixed(3)}, ${lng.toFixed(3)}</div></div>`)
     .addTo(map);
   popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
   destMarkerObj.popup = popup;
