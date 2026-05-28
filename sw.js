@@ -23,7 +23,6 @@ const APP_SHELL = [
   '/vendor/maplibre-gl.js',
   '/vendor/maplibre-gl.css',
   '/vendor/supercluster.min.js',
-  '/vendor/exif.js',
   '/vendor/fonts.css',
 ];
 
