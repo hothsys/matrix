@@ -107,9 +107,9 @@ function _patchStyleWater(styleObj) {
   }
   // Apple Maps Dark palette — neutral dark land, distinctly blue water.
   // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
-  if (_mapStyle === 'dark' || _mapStyle === 'terrain3d') {
-    // Darker water for both Dark Map and 3D Terrain modes
-    const waterColor = _mapStyle === 'terrain3d' ? '#1a2e3d' : '#131619';
+  if (_mapStyle === 'dark') {
+    // Darker water for Dark Map
+    const waterColor = '#131619';
     for (const layer of styleObj.layers) {
       if (!layer.paint) layer.paint = {};
       if (layer.type === 'fill' && /^water/.test(layer.id)) {
@@ -273,6 +273,120 @@ function toggleLabels() {
   }
 }
 
+// Apply vivid parks, airport runways, mountain peaks, and optional 3D buildings
+function applyExtraLayers() {
+  const hasOmt = map.getSource && map.getSource('openmaptiles');
+  if (!hasOmt || ['satellite', 'globe'].includes(_mapStyle)) return;
+
+  // Vivid park fill — more saturated green over the base park layer
+  if (!map.getLayer('matrix-park-vivid')) {
+    map.addLayer({
+      id: 'matrix-park-vivid',
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'park',
+      minzoom: 5,
+      paint: {
+        'fill-color': '#5aab5a',
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.08, 12, 0.18]
+      }
+    }, 'park_outline');
+  }
+
+  // Airport runway & taxiway fill — visible from zoom 9+
+  if (!map.getLayer('matrix-aeroway-fill')) {
+    map.addLayer({
+      id: 'matrix-aeroway-fill',
+      type: 'fill',
+      source: 'openmaptiles',
+      'source-layer': 'aeroway',
+      minzoom: 9,
+      filter: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false],
+      paint: {
+        'fill-color': '#d8d4cb',
+        'fill-opacity': 0.6
+      }
+    }, 'aeroway_fill');
+  }
+  if (!map.getLayer('matrix-aeroway-runway')) {
+    map.addLayer({
+      id: 'matrix-aeroway-runway',
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'aeroway',
+      minzoom: 10,
+      filter: ['==', ['get', 'class'], 'runway'],
+      paint: {
+        'line-color': '#c8c4bb',
+        'line-width': ['interpolate', ['exponential', 1.2], ['zoom'], 10, 1, 18, 12]
+      }
+    });
+  }
+
+  // Mountain peak labels — shows summit names at zoom 10+
+  if (!map.getLayer('matrix-mountain-peaks')) {
+    map.addLayer({
+      id: 'matrix-mountain-peaks',
+      type: 'symbol',
+      source: 'openmaptiles',
+      'source-layer': 'poi',
+      minzoom: 10,
+      filter: ['==', ['get', 'class'], 'mountain'],
+      layout: {
+        'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 11,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.5],
+        'icon-image': 'mountain_11',
+        'icon-size': 0.8,
+        'icon-allow-overlap': false,
+        'text-allow-overlap': false
+      },
+      paint: {
+        'text-color': _mapStyle === 'dark' ? '#a0b8c0' : '#5a7a8a',
+        'text-halo-color': _mapStyle === 'dark' ? '#1a2530' : '#ffffff',
+        'text-halo-width': 1.5
+      }
+    });
+  }
+
+  // 3D buildings — only when toggled on, zoom 15+
+  apply3DBuildings();
+}
+
+function apply3DBuildings() {
+  if (!map.getSource || !map.getSource('openmaptiles')) return;
+  const shouldShow = buildings3DVisible && !['satellite', 'terrain3d', 'globe'].includes(_mapStyle);
+  if (shouldShow && !map.getLayer('matrix-buildings-3d')) {
+    // Insert below the first symbol layer so road/POI labels render on top of buildings
+    const firstSymbol = map.getStyle()?.layers?.find(l => l.type === 'symbol');
+    map.addLayer({
+      id: 'matrix-buildings-3d',
+      type: 'fill-extrusion',
+      source: 'openmaptiles',
+      'source-layer': 'building',
+      minzoom: 15,
+      paint: {
+        'fill-extrusion-color': _mapStyle === 'dark' ? '#2a2e3a' : '#d9d6d0',
+        'fill-extrusion-height': ['get', 'render_height'],
+        'fill-extrusion-base': ['get', 'render_min_height'],
+        'fill-extrusion-opacity': 0.75
+      }
+    }, firstSymbol?.id);
+  } else if (!shouldShow && map.getLayer('matrix-buildings-3d')) {
+    map.removeLayer('matrix-buildings-3d');
+  }
+  const btn = document.getElementById('tb-3d-buildings');
+  if (btn) btn.style.opacity = buildings3DVisible ? '1' : '.4';
+}
+
+function toggle3DBuildings() {
+  buildings3DVisible = !buildings3DVisible;
+  localStorage.setItem('matrix-3d-buildings', buildings3DVisible ? 'visible' : 'hidden');
+  apply3DBuildings();
+}
+
 function addPinLayers() {
   if (!map.getSource('photo-pins')) {
     map.addSource('photo-pins', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -383,6 +497,7 @@ async function _doStyleSwap(style) {
       raiseLabelsAboveRoads();
       applyLabelScale();
       applyLabelVisibility();
+      applyExtraLayers();
       // Re-add pin icons from pixel cache (fast) and refresh clusters
       // without rebuilding the Supercluster index (unchanged)
       // Update dark-map CSS class after pin icons are re-added with correct compensation
@@ -547,9 +662,26 @@ async function initMap() {
       btn.addEventListener('click', toggleLabels);
       wrap.appendChild(btn);
       navGroup.after(wrap);
+
+      // 3D Buildings toggle — inserted before navGroup so it appears above zoom controls
+      const bldgWrap = document.createElement('div');
+      bldgWrap.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+      bldgWrap.id = 'buildings-toggle-wrap';
+      const bldgBtn = document.createElement('button');
+      bldgBtn.id = 'tb-3d-buildings';
+      bldgBtn.type = 'button';
+      bldgBtn.title = '3D Buildings (zoom 15+)';
+      bldgBtn.setAttribute('aria-label', 'Toggle 3D buildings');
+      bldgBtn.style.opacity = buildings3DVisible ? '1' : '.4';
+      bldgBtn.innerHTML = '<span style="font-size:11px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">3D</span>';
+      bldgBtn.addEventListener('click', toggle3DBuildings);
+      bldgWrap.appendChild(bldgBtn);
+      if (['satellite', 'terrain3d', 'globe'].includes(_mapStyle)) bldgWrap.style.display = 'none';
+      navGroup.before(bldgWrap);
     }
     applyLabelScale();
     applyLabelVisibility();
+    applyExtraLayers();
     _applyTerrainAndProjection();
     // Tile loading spinner
     const tileSpinner = document.getElementById('tile-spinner');
@@ -751,6 +883,9 @@ function setMapStyle(mode) {
   // Labels toggle visibility
   const labelsWrap = document.getElementById('labels-toggle-wrap');
   if (labelsWrap) labelsWrap.style.visibility = _mapStyle === 'satellite' ? 'hidden' : 'visible';
+  // Hide 3D buildings toggle in modes where buildings don't make sense
+  const bldgWrap = document.getElementById('buildings-toggle-wrap');
+  if (bldgWrap) bldgWrap.style.display = ['satellite', 'terrain3d', 'globe'].includes(_mapStyle) ? 'none' : '';
 
   // Disable Export Video in Globe mode (flyTo animation doesn't translate to globe projection)
   const exportBtn = document.getElementById('tb-export-video');
