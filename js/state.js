@@ -35,6 +35,7 @@ let pinPickerCoords = null;
 // map style + labels
 let _mapStyle = 'dark'; // 'dark' | 'light' | 'enriched' | 'satellite'
 let labelsVisible = (() => { const v = localStorage.getItem('matrix-labels'); return v === null || v === 'visible'; })();
+let buildings3DVisible = (() => localStorage.getItem('matrix-3d-buildings') === 'visible')();
 // helpers
 let toastT;
 

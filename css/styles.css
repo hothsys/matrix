@@ -187,7 +187,7 @@ input,textarea,select{font-family:var(--font)}
 #sidebar.collapsed~#sidebar-toggle{left:0}
 
 /* MAP TOOLBAR */
-#map-toolbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:5px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:28px;padding:5px 8px;box-shadow:var(--shadow)}
+#map-toolbar{position:absolute;top:12px;left:50%;transform:translateX(-50%) translateZ(0);z-index:5;display:flex;gap:5px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:28px;padding:5px 8px;box-shadow:var(--shadow);-webkit-font-smoothing:antialiased}
 .tb-btn{background:none;border:none;color:var(--muted);font-size:.73rem;font-weight:500;padding:5px 10px;border-radius:20px;transition:all .15s;white-space:nowrap}
 .tb-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 .tb-btn:hover{background:var(--surface2);color:var(--text)}
