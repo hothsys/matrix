@@ -43,5 +43,5 @@ This project includes the following third-party software:
 
 - Map data: OpenStreetMap contributors (ODbL 1.0)
 - Map tiles: OpenFreeMap (https://openfreemap.org)
-- Satellite imagery: Esri, Maxar, Earthstar Geographics
+- Satellite imagery: EOX IT Services GmbH — Sentinel-2 cloudless 2020 (CC BY 4.0) — https://s2maps.eu
 - Geocoding: Nominatim / OpenStreetMap (ODbL 1.0)

@@ -12,7 +12,7 @@ const STYLE_BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
 const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const STYLE_SAT = {
   version:8,
-  sources:{sat:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19}},
+  sources:{sat:{type:'raster',tiles:['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg'],tileSize:256,maxzoom:18}},
   layers:[{id:'sat',type:'raster',source:'sat',paint:{'raster-fade-duration':0}}]
 };
 function normalizeDarkLabels() {
