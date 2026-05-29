@@ -57,14 +57,33 @@ async function processFiles(files) {
     for (const r of results) {
       if (r.dup) { dupes++; continue; }
       if (r.err) continue;
+      const photoId = `p_${Date.now()}_${Math.random().toString(36).slice(2)}_${ok}`;
+      // Save full-size image to disk — IndexedDB stores only the file path reference.
+      // This keeps IndexedDB lean (~50KB/photo vs ~4MB with base64).
+      // Verify the file is accessible before replacing base64 with the path.
+      let diskDataUrl = r.dataUrl;
+      if (_autoSaveAvailable && r.dataUrl && r.dataUrl.startsWith('data:')) {
+        try {
+          await fetch(`/api/photos/${photoId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl: r.dataUrl })
+          });
+          const ext = (r.dataUrl.match(/data:image\/(\w+)/) || [])[1] === 'png' ? 'png' : 'jpg';
+          const filePath = `matrix-photos/${photoId}.${ext}`;
+          // Verify the file is servable before committing the path to IndexedDB
+          const check = await fetch(`/${filePath}`, { method: 'HEAD' });
+          if (check.ok) diskDataUrl = filePath;
+        } catch (_) { /* fall back to base64 in IndexedDB if disk save fails */ }
+      }
       const photo = {
-        id: `p_${Date.now()}_${Math.random().toString(36).slice(2)}_${ok}`,
+        id: photoId,
         name: r.name.replace(/\.[^.]+$/,''),
         date: r.exif.date, time: r.exif.time,
         lat: r.exif.lat, lng: r.exif.lng,
         camera: r.exif.camera || null,
         placeName: null, countryCode: null, note: '',
-        dataUrl: r.dataUrl, thumbUrl: r.thumbUrl,
+        dataUrl: diskDataUrl, thumbUrl: r.thumbUrl,
         addedAt: Date.now(), _dk: r.dk
       };
       photos.push(photo);

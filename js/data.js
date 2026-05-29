@@ -185,13 +185,16 @@ function exportData() {
   setTimeout(() => _doExport(), 50);
 }
 async function _doExport() {
-  // Replace base64 dataUrl with the server file path — full-size images live in
-  // matrix-photos/ on disk. On import, the path is resolved back to a data URL.
-  // This avoids "Invalid string length" errors on large datasets (>512MB V8 limit).
+  // Filter out empty pins; ensure dataUrl is a file path (not base64) for export.
+  // After the IndexedDB refactor, dataUrl is already a path for most photos.
+  // For any un-migrated photos still holding base64, convert to path.
   const exportPhotos = photos.filter(p => !p.isEmptyPin).map(p => {
-    const { dataUrl, ...rest } = p;
-    const ext = (dataUrl && dataUrl.match(/data:image\/(\w+)/)?.[1] === 'png') ? 'png' : 'jpg';
-    return { ...rest, dataUrl: `matrix-photos/${p.id}.${ext}` };
+    if (p.dataUrl && p.dataUrl.startsWith('data:')) {
+      const { dataUrl, ...rest } = p;
+      const ext = (dataUrl.match(/data:image\/(\w+)/)?.[1] === 'png') ? 'png' : 'jpg';
+      return { ...rest, dataUrl: `matrix-photos/${p.id}.${ext}` };
+    }
+    return { ...p };
   });
   const payload = { version: 1, exportedAt: Date.now(), photos: exportPhotos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
   const json = JSON.stringify(payload);
@@ -597,6 +600,9 @@ async function init() {
   setTimeout(() => cacheMapTiles(), 10000);
   // One-time migration: convert PNG thumbnails to JPEG (remove once both machines have run this)
   setTimeout(() => _migrateThumbsToWebP(), 2000);
+  // One-time migration: move full-size base64 images from IndexedDB to disk
+  // After this, IndexedDB holds only metadata + thumbnails (~50KB per photo vs ~4MB)
+  setTimeout(() => _migrateImagesToDisk(), 3000);
 }
 
 
@@ -632,6 +638,50 @@ async function _migrateThumbsToWebP() {
     rebuildPhotoList();
     buildTimeline();
     scheduleAutoSave();
+  }
+}
+
+// ═══════════════════════════════════════
+// ONE-TIME MIGRATION: Move base64 images from IndexedDB to disk
+// After this migration, IndexedDB holds metadata + thumbnails only (~50KB/photo vs ~4MB).
+// Full-size images live in matrix-photos/ and are loaded on-demand by the lightbox.
+// ═══════════════════════════════════════
+async function _migrateImagesToDisk() {
+  if (!_autoSaveAvailable) return; // serve.py must be running to save files
+  // Find photos still storing base64 full-size images in IndexedDB
+  const needMigration = photos.filter(p => p.dataUrl && p.dataUrl.startsWith('data:'));
+  if (!needMigration.length) return;
+
+  showToast(`Migrating ${needMigration.length} photo${needMigration.length !== 1 ? 's' : ''} to disk…`, 'info');
+  let migrated = 0;
+
+  for (const p of needMigration) {
+    try {
+      const ext = (p.dataUrl.match(/data:image\/(\w+)/) || [])[1] === 'png' ? 'png' : 'jpg';
+      const filePath = `matrix-photos/${p.id}.${ext}`;
+      // Check if the image already exists on disk (from prior auto-save)
+      const exists = await fetch(`/${filePath}`, { method: 'HEAD' }).then(r => r.ok).catch(() => false);
+      if (!exists) {
+        // Image not on disk yet — save it now from the base64 in IndexedDB
+        await fetch(`/api/photos/${p.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: p.dataUrl })
+        });
+      }
+      // Replace base64 with the file path reference in memory + IndexedDB
+      p.dataUrl = filePath;
+      await dbPut('photos', p);
+      migrated++;
+    } catch (err) {
+      // Skip failures — photo retains its base64 and can retry next load
+      console.warn(`Migration failed for ${p.id}:`, err.message);
+    }
+  }
+
+  if (migrated) {
+    scheduleAutoSave();
+    showToast(`Migrated ${migrated} photo${migrated !== 1 ? 's' : ''} to disk ✓`, 'success');
   }
 }
 
