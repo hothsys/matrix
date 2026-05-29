@@ -166,9 +166,9 @@ input,textarea,select{font-family:var(--font)}
 #map{width:100%;height:100%}
 #map:not(.dark-map):not(.sat-mode) canvas{filter:brightness(0.85)}
 #map.dark-map canvas{filter:brightness(1.8) contrast(0.9);will-change:filter}
-#esri-attribution{display:none;position:absolute;bottom:6px;left:6px;background:rgba(30,30,30,.6);color:#aaa;font-size:.55rem;padding:2px 6px;border-radius:4px;z-index:2;pointer-events:auto}
-#esri-attribution a{color:var(--accent);text-decoration:none}
-#map.sat-mode~#esri-attribution{display:block}
+#sat-attribution{display:none;position:absolute;bottom:6px;left:6px;background:rgba(30,30,30,.6);color:#aaa;font-size:.55rem;padding:2px 6px;border-radius:4px;z-index:2;pointer-events:auto}
+#sat-attribution a{color:var(--accent);text-decoration:none}
+#map.sat-mode~#sat-attribution{display:block}
 .maplibregl-ctrl-bottom-right{bottom:16px!important;right:2px!important}
 .maplibregl-ctrl-group{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:10px!important;overflow:hidden;box-shadow:var(--shadow)!important}
 .maplibregl-ctrl-group button{background:var(--surface)!important;border-bottom:1px solid var(--border)!important}
