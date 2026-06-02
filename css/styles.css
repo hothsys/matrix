@@ -225,6 +225,15 @@ input,textarea,select{font-family:var(--font)}
 .dest-item-name{font-weight:500;color:var(--text)}
 .dest-item-detail{font-size:.66rem;color:var(--muted);margin-top:1px}
 #dest-loading{padding:10px 12px;font-size:.73rem;color:var(--muted);display:none}
+#search-cat-wrap{position:relative}
+#search-cat-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:.73rem;font-weight:500;padding:5px 10px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:all .15s;line-height:1}
+#search-cat-btn:hover{background:var(--surface3);color:var(--text)}
+#search-cat-btn.active{border-color:var(--accent);color:var(--accent)}
+#search-cat-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);display:none;z-index:100;min-width:130px;overflow:hidden}
+#search-cat-menu.open{display:block}
+.search-cat-item{padding:8px 14px;font-size:.73rem;cursor:pointer;transition:background .12s;color:var(--text)}
+.search-cat-item:hover{background:var(--surface2)}
+.search-cat-item.active{color:var(--accent);font-weight:500}
 
 /* PIN MARKERS (canvas-rendered via symbol layer — no DOM positioning) */
 /* Cluster markers still use DOM for click expand */

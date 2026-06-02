@@ -405,7 +405,7 @@ async function autoSave() {
   if (!_autoSaveAvailable) return;
   try {
     // Upload new photo files that haven't been saved yet
-    const uploads = photos.filter(p => !_savedPhotoDisk.has(p.id) && p.dataUrl && p.dataUrl.startsWith('data:'));
+    const uploads = photos.filter(p => !_savedPhotoDisk.has(p.id) && !p.isEmptyPin);
     await Promise.all(uploads.map(p => uploadPhotoFile(p)));
 
     // Build metadata-only payload with file paths instead of base64
@@ -704,9 +704,6 @@ window.addEventListener('offline', () => updateOfflineState(true));
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 if ('serviceWorker' in navigator && !isSafari) {
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(err => console.warn('SW registration failed:', err));
-  navigator.serviceWorker.ready.then(reg => {
-    if (reg.active) reg.active.postMessage({ type: 'set-port', port: location.port || '8765' });
-  });
 } else if (isSafari && navigator.serviceWorker) {
   // Unregister any existing SW in Safari to clean up stale state
   navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));

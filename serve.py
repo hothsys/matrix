@@ -182,7 +182,7 @@ def setup_vendor():
 PHOTO_RE = re.compile(r"^/api/photos/([a-zA-Z0-9_-]+)(/thumb)?$")
 
 # Allowed tile origins for the proxy
-TILE_ALLOWED_HOSTS = {'tiles.openfreemap.org', 'server.arcgisonline.com'}
+TILE_ALLOWED_HOSTS = {'tiles.openfreemap.org', 'tiles.maps.eox.at'}
 
 # Video export streaming state: session_id -> {path, file, mime}
 _video_sessions = {}
@@ -306,6 +306,8 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         try:
             if self.path == "/api/data":
                 self._save_data()
+            elif self.path == "/api/overpass":
+                self._overpass_query()
             elif self.path.startswith("/api/tiles/cache?"):
                 self._cache_tile()
             elif self.path == "/api/video/start":
@@ -452,6 +454,28 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             self.wfile.write(data)
         except (ConnectionResetError, BrokenPipeError):
             pass  # Client disconnected (e.g. user panned away, SW timeout)
+
+    def _overpass_query(self):
+        """Proxy Overpass API queries through serve.py to bypass network-level browser restrictions."""
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length) if length else b''
+        try:
+            req = urllib.request.Request(
+                'https://overpass-api.de/api/interpreter',
+                data=body,
+                headers={'Content-Type': 'application/x-www-form-urlencoded',
+                         'User-Agent': 'Matrix-travel-app/1.0'}
+            )
+            with _urlopen(req) as resp:
+                data = resp.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self.send_response(502)
+            self.end_headers()
+            self.wfile.write(str(e).encode())
 
     def _proxy_tile(self):
         """Serve tile from disk cache only. Returns 404 if not cached."""
