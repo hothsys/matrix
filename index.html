@@ -120,6 +120,15 @@
       <button id="dest-clear" onclick="clearDestSearch()">✕</button>
       <div id="dest-results"><div id="dest-loading">Searching…</div></div>
     </div>
+    <div id="search-cat-wrap">
+      <button id="search-cat-btn" onclick="toggleSearchCatMenu()"><span id="search-cat-label">All</span> ▾</button>
+      <div id="search-cat-menu">
+        <div class="search-cat-item active" data-cat="all" onclick="setSearchCat('all')">All</div>
+        <div class="search-cat-item" data-cat="hotel" onclick="setSearchCat('hotel')">🏨 Hotel</div>
+        <div class="search-cat-item" data-cat="restaurant" onclick="setSearchCat('restaurant')">🍽 Restaurant</div>
+        <div class="search-cat-item" data-cat="attraction" onclick="setSearchCat('attraction')">🏛 Attraction</div>
+      </div>
+    </div>
     <div id="tile-spinner" class="tile-spinner"></div>
     <div class="tb-sep"></div>
     <div id="map-style-wrap" style="position:relative">
@@ -131,6 +140,7 @@
         <div class="style-menu-item" data-style="enriched" onclick="setMapStyle('enriched')">Terrain</div>
         <div class="style-menu-item" data-style="terrain3d" onclick="setMapStyle('terrain3d')">3D Terrain</div>
         <div class="style-menu-item" data-style="satellite" onclick="setMapStyle('satellite')">Satellite</div>
+        <div class="style-menu-item" data-style="satellite3d" onclick="setMapStyle('satellite3d')">3D Satellite</div>
         <div class="style-menu-item" data-style="globe" onclick="setMapStyle('globe')">Globe</div>
       </div>
     </div>

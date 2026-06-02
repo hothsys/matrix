@@ -9,12 +9,41 @@ const dClear   = document.getElementById('dest-clear');
 
 const _searchCache = {};
 let _searchMoveTimer = null;
+let _searchCategory = 'all';
+
+const POI_CATEGORIES = {
+  hotel:      { label: '🏨 Hotel',      tags: [['amenity','hotel'],['tourism','hotel']] },
+  restaurant: { label: '🍽 Restaurant', tags: [['amenity','restaurant'],['amenity','cafe'],['amenity','bar'],['amenity','pub'],['amenity','fast_food']] },
+  attraction: { label: '🏛 Attraction',  tags: [['tourism','attraction'],['tourism','museum'],['tourism','viewpoint']] },
+};
+
+function toggleSearchCatMenu() {
+  document.getElementById('search-cat-menu').classList.toggle('open');
+}
+
+function setSearchCat(cat) {
+  _searchCategory = cat;
+  document.getElementById('search-cat-label').textContent = cat === 'all' ? 'All' : POI_CATEGORIES[cat].label;
+  document.getElementById('search-cat-btn').classList.toggle('active', cat !== 'all');
+  document.querySelectorAll('.search-cat-item').forEach(el => el.classList.toggle('active', el.dataset.cat === cat));
+  document.getElementById('search-cat-menu').classList.remove('open');
+  Object.keys(_searchCache).forEach(k => delete _searchCache[k]);
+  const q = dInput.value.trim();
+  if (q.length >= 2) {
+    dResults.style.display = 'block';
+    runDestSearch(q);
+  } else if (cat !== 'all') {
+    dResults.style.display = 'block';
+    dLoading.style.display = 'none';
+    dResults.innerHTML = '<div style="padding:9px 12px;font-size:.73rem;color:var(--muted)">Type to search nearby</div>';
+  }
+}
 
 // Re-run visible search when the map viewport changes (pan/zoom)
 function _onMapMoveForSearch() {
   clearTimeout(_searchMoveTimer);
   const q = dInput.value.trim();
-  if (q.length < 2 || dResults.style.display === 'none' || destMarkerObj) return;
+  if ((q.length < 2 && _searchCategory === 'all') || dResults.style.display === 'none' || destMarkerObj) return;
   _searchMoveTimer = setTimeout(() => runDestSearch(q), 600);
 }
 
@@ -22,12 +51,13 @@ dInput.addEventListener('input', () => {
   const q = dInput.value.trim();
   dClear.style.display = q ? 'block' : 'none';
   clearTimeout(searchTimer);
-  if (q.length < 2) { dResults.style.display='none'; return; }
+  if (q.length < 2 && _searchCategory === 'all') { dResults.style.display='none'; return; }
   searchTimer = setTimeout(() => runDestSearch(q), 380);
 });
 dInput.addEventListener('keydown', e => { if(e.key==='Escape'){clearDestSearch();dInput.blur();} });
 document.addEventListener('click', e => {
   if (!document.getElementById('dest-search-wrap').contains(e.target)) dResults.style.display='none';
+  if (!document.getElementById('search-cat-wrap').contains(e.target)) document.getElementById('search-cat-menu').classList.remove('open');
 });
 
 
@@ -130,6 +160,69 @@ async function runReverseGeoSearch(lat, lng) {
   }
 }
 
+async function runCategorySearch(q, cat, cacheKey) {
+  if (!map || q.length < 2) {
+    dLoading.style.display = 'none';
+    dResults.innerHTML = '<div style="padding:9px 12px;font-size:.73rem;color:var(--muted)">Type to search nearby</div>';
+    return;
+  }
+  const b = map.getBounds();
+
+  // --- Attempt 1: Overpass via local proxy (precise tag-based POI search) ---
+  const bbox = `(${b.getSouth().toFixed(5)},${b.getWest().toFixed(5)},${b.getNorth().toFixed(5)},${b.getEast().toFixed(5)})`;
+  const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nameFilter = `["name"~"${safe}",i]`;
+  const stmts = POI_CATEGORIES[cat].tags.flatMap(([k, v]) => [
+    `node["${k}"="${v}"]${nameFilter}${bbox};`,
+    `way["${k}"="${v}"]${nameFilter}${bbox};`,
+    `relation["${k}"="${v}"]${nameFilter}${bbox};`,
+  ]).join('\n  ');
+  const query = `[out:json][timeout:10];\n(\n  ${stmts}\n);\nout center 20;`;
+  try {
+    const r = await fetch('/api/overpass', { method: 'POST', body: new URLSearchParams({ data: query }) });
+    if (r.ok) {
+      const data = await r.json();
+      const results = (data.elements || [])
+        .filter(el => el.tags?.name)
+        .map(el => {
+          const t = el.tags, lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
+          if (lat == null || lon == null) return null;
+          const city = t['addr:city'] || t['addr:town'] || t['addr:village'] || '';
+          const country = t['addr:country'] || '';
+          return {
+            display_name: [t.name, city, country].filter(Boolean).join(', '),
+            lat: String(lat), lon: String(lon),
+            address: { city, country }
+          };
+        })
+        .filter(Boolean);
+      _searchCache[cacheKey] = results;
+      renderSearchResults(results);
+      return;
+    }
+  } catch(_) { /* proxy unreachable — fall through to Nominatim */ }
+
+  // --- Fallback: Nominatim bounded=1 + layer=poi (works everywhere, less precise) ---
+  const viewbox = `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=1&layer=poi`;
+  const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
+  if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));
+  _lastNominatimCall = Date.now();
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=20&addressdetails=1${viewbox}`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    _searchCache[cacheKey] = data;
+    renderSearchResults(data);
+  } catch(err) {
+    console.warn('Category search failed:', err);
+    dLoading.style.display = 'none';
+    dResults.innerHTML = `<div style="padding:9px 12px;font-size:.73rem;color:var(--accent2)">Search failed — try again</div>`;
+  }
+}
+
 async function runDestSearch(q) {
   if (_isOffline) {
     dResults.style.display='block'; dLoading.style.display='none';
@@ -153,8 +246,13 @@ async function runDestSearch(q) {
   }
 
   const zoom = map ? map.getZoom() : 0;
-  const cacheKey = q + (zoom >= 3 ? `@${map.getCenter().lng.toFixed(1)},${map.getCenter().lat.toFixed(1)}` : '');
+  const cacheKey = q + (zoom >= 3 ? `@${map.getCenter().lng.toFixed(1)},${map.getCenter().lat.toFixed(1)}` : '') + (_searchCategory !== 'all' ? `#${_searchCategory}` : '');
   if (_searchCache[cacheKey]) { renderSearchResults(_searchCache[cacheKey]); return; }
+
+  if (_searchCategory !== 'all') {
+    await runCategorySearch(q, _searchCategory, cacheKey);
+    return;
+  }
   try {
     const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
     if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));

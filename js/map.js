@@ -2,7 +2,7 @@
 // MAP
 // ═══════════════════════════════════════
 function _styleUrl() {
-  if (_mapStyle === 'satellite') return STYLE_SAT;
+  if (_mapStyle === 'satellite' || _mapStyle === 'satellite3d') return STYLE_SAT;
   if (_mapStyle === 'dark') return STYLE_DARK;
   if (_mapStyle === 'bright') return STYLE_BRIGHT;
   return STYLE_STREET; // light, enriched, terrain3d, globe all use Liberty as base
@@ -236,7 +236,7 @@ function _scaledTextSize(orig) {
 }
 
 function applyLabelScale() {
-  if (_mapStyle === 'satellite') return;
+  if (_mapStyle === 'satellite' || _mapStyle === 'satellite3d') return;
   const style = map.getStyle();
   if (!style || !style.layers) return;
   for (const layer of style.layers) {
@@ -251,7 +251,7 @@ function applyLabelScale() {
 }
 
 function applyLabelVisibility() {
-  if (_mapStyle === 'satellite') return;
+  if (_mapStyle === 'satellite' || _mapStyle === 'satellite3d') return;
   const vis = labelsVisible ? 'visible' : 'none';
   const style = map.getStyle();
   if (!style || !style.layers) return;
@@ -276,7 +276,7 @@ function toggleLabels() {
 // Apply vivid parks, airport runways, mountain peaks, and optional 3D buildings
 function applyExtraLayers() {
   const hasOmt = map.getSource && map.getSource('openmaptiles');
-  if (!hasOmt || ['satellite', 'globe'].includes(_mapStyle)) return;
+  if (!hasOmt || ['satellite', 'satellite3d', 'globe'].includes(_mapStyle)) return;
 
   // Vivid park fill — more saturated green over the base park layer
   if (!map.getLayer('matrix-park-vivid')) {
@@ -357,7 +357,7 @@ function applyExtraLayers() {
 
 function apply3DBuildings() {
   if (!map.getSource || !map.getSource('openmaptiles')) return;
-  const shouldShow = buildings3DVisible && !['satellite', 'terrain3d', 'globe'].includes(_mapStyle);
+  const shouldShow = buildings3DVisible && !['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle);
   if (shouldShow && !map.getLayer('matrix-buildings-3d')) {
     // Insert below the first symbol layer so road/POI labels render on top of buildings
     const firstSymbol = map.getStyle()?.layers?.find(l => l.type === 'symbol');
@@ -418,7 +418,7 @@ function addPinLayers() {
       if (!alreadyThere) {
         // In 3D Terrain (pitched view), offset the focal point downward in screen space
         // so the pin appears in the visible ground area rather than drifting off-screen
-        const pitchOffset = _mapStyle === 'terrain3d' ? [0, Math.round(map.transform?.height * 0.15 || 100)] : [0, 0];
+        const pitchOffset = (_mapStyle === 'terrain3d' || _mapStyle === 'satellite3d') ? [0, Math.round(map.transform?.height * 0.15 || 100)] : [0, 0];
         map.flyTo({ center: [lng, lat], zoom: targetZoom, speed: 0.8, curve: 1.0, essential: true,
           offset: pitchOffset,
           easing: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2 });
@@ -446,7 +446,7 @@ function applyTheme() {
   _tileTemplatesCache = null;
   // Set initial button label
   const btn = document.getElementById('tb-style-btn');
-  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
 
   // Set initial active state in menu
@@ -624,7 +624,7 @@ async function initMap() {
     map.getCanvas().addEventListener('mouseout', () => { coordsEl.style.display = 'none'; });
     const updateZoom = () => {
       zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
-      const is3D = _mapStyle === 'terrain3d';
+      const is3D = _mapStyle === 'terrain3d' || _mapStyle === 'satellite3d';
       if (is3D) {
         pitchWrap.style.display = 'flex';
         pitchEl.textContent = `p${map.getPitch().toFixed(0)}° b${map.getBearing().toFixed(0)}°`;
@@ -676,7 +676,7 @@ async function initMap() {
       bldgBtn.innerHTML = '<span style="font-size:11px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">3D</span>';
       bldgBtn.addEventListener('click', toggle3DBuildings);
       bldgWrap.appendChild(bldgBtn);
-      if (['satellite', 'terrain3d', 'globe'].includes(_mapStyle)) bldgWrap.style.display = 'none';
+      if (['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle)) bldgWrap.style.display = 'none';
       navGroup.before(bldgWrap);
     }
     applyLabelScale();
@@ -701,7 +701,7 @@ async function initMap() {
     // Water clicks allowed at any zoom; land clicks require zoom >= 5.
     // Satellite/terrain3d/globe have no vector layers for water detection.
     const allHits = map.queryRenderedFeatures(e.point);
-    const noVectorLayers = ['satellite', 'terrain3d', 'globe'].includes(_mapStyle);
+    const noVectorLayers = ['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle);
     const isWater = !noVectorLayers && allHits.some(f => f.layer.type === 'fill' && /^(water|ocean)/.test(f.layer.id));
     // If style is mid-transition (queryRenderedFeatures returns nothing), treat as land
     if (!isWater && map.getZoom() < 5) return;
@@ -765,7 +765,7 @@ async function initMap() {
 
     // Elevation — only in 3D Terrain mode
     let elevationStr = '';
-    if (_mapStyle === 'terrain3d') {
+    if (_mapStyle === 'terrain3d' || _mapStyle === 'satellite3d') {
       try {
         const elev = map.queryTerrainElevation([lng, lat]);
         if (elev !== null && elev !== undefined) {
@@ -871,21 +871,21 @@ function toggleStyleMenu(e) {
 function setMapStyle(mode) {
   const wasDark = _mapStyle === 'dark';
   _mapStyle = mode;
-  // Persist style preference (satellite resets to previous on reload)
-  if (mode !== 'satellite') localStorage.setItem('matrix-theme', mode);
+  // Persist style preference (satellite/satellite3d reset to previous on reload)
+  if (mode !== 'satellite' && mode !== 'satellite3d') localStorage.setItem('matrix-theme', mode);
 
   // Defer dark-map CSS class removal until pin icons are re-added with correct
   // compensation (otherwise pre-darkened images render without the CSS filter)
   const mapEl = document.getElementById('map');
   if (_mapStyle === 'dark') mapEl.classList.add('dark-map');
-  mapEl.classList.toggle('sat-mode', ['satellite', 'terrain3d', 'globe'].includes(_mapStyle));
+  mapEl.classList.toggle('sat-mode', ['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle));
 
   // Labels toggle visibility
   const labelsWrap = document.getElementById('labels-toggle-wrap');
-  if (labelsWrap) labelsWrap.style.visibility = _mapStyle === 'satellite' ? 'hidden' : 'visible';
+  if (labelsWrap) labelsWrap.style.visibility = (_mapStyle === 'satellite' || _mapStyle === 'satellite3d') ? 'hidden' : 'visible';
   // Hide 3D buildings toggle in modes where buildings don't make sense
   const bldgWrap = document.getElementById('buildings-toggle-wrap');
-  if (bldgWrap) bldgWrap.style.display = ['satellite', 'terrain3d', 'globe'].includes(_mapStyle) ? 'none' : '';
+  if (bldgWrap) bldgWrap.style.display = ['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle) ? 'none' : '';
 
   // Disable Export Video in Globe mode (flyTo animation doesn't translate to globe projection)
   const exportBtn = document.getElementById('tb-export-video');
@@ -895,7 +895,7 @@ function setMapStyle(mode) {
   }
 
   // Update button label
-  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   const btn = document.getElementById('tb-style-btn');
   if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
 
@@ -914,7 +914,7 @@ function setMapStyle(mode) {
 }
 
 function _applyTerrainAndProjection() {
-  const is3D = _mapStyle === 'terrain3d';
+  const is3D = _mapStyle === 'terrain3d' || _mapStyle === 'satellite3d';
   const isGlobe = _mapStyle === 'globe';
 
   // Set projection FIRST — before any camera moves — so easeTo never runs under the wrong projection
@@ -956,7 +956,7 @@ function _applyTerrainAndProjection() {
         if (map.getLayer('sky') === undefined) {
           map.addLayer({ id: 'sky', type: 'sky', paint: { 'sky-type': 'gradient', 'sky-gradient': ['interpolate', ['linear'], ['sky-radial-progress'], 0, 'rgba(255,255,255,0)', 0.5, '#87cefa', 1, '#4682b4'] } });
         }
-    if (!map.getLayer('terrain-hillshade')) {
+    if (_mapStyle !== 'satellite3d' && !map.getLayer('terrain-hillshade')) {
       // Insert below the first road/label layer so hillshading shows through
       const firstSymbol = map.getStyle().layers.find(l => l.type === 'line' || l.type === 'symbol');
       map.addLayer({

@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v19';
+const CACHE_VERSION = 'matrix-v20';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -29,7 +29,7 @@ const APP_SHELL = [
 // Tile URL patterns to cache (raster + vector tiles, sprites, glyphs)
 const TILE_PATTERNS = [
   /tiles\.openfreemap\.org\/planet\//,  // vector tiles only (not style JSON)
-  /server\.arcgisonline\.com/,
+  /tiles\.maps\.eox\.at/,
   /\.pbf(\?|$)/,     // vector tile protobuf files
   /sprites?\//,       // map sprites
   /glyphs?\//,        // map font glyphs
@@ -37,9 +37,6 @@ const TILE_PATTERNS = [
 
 // Max cached tiles (LRU eviction when exceeded)
 const MAX_TILES = 10000;
-
-// Local server port for disk-cached tile proxy
-let serverPort = 8765;
 
 console.log(`SW: ${CACHE_VERSION} loaded`);
 
@@ -53,10 +50,6 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting();
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data?.type === 'set-port') serverPort = event.data.port;
 });
 
 self.addEventListener('activate', (event) => {
@@ -159,7 +152,7 @@ async function tileStrategy(request) {
   const cached = await caches.match(request, { ignoreVary: true });
   if (cached) return cached;
 
-  const proxyUrl = `http://localhost:${serverPort}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
+  const proxyUrl = `${self.location.origin}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
 
   const cacheAndReturn = async (body, ct) => {
     try {
@@ -184,7 +177,7 @@ async function tileStrategy(request) {
     return r.arrayBuffer().then(body => {
       const ct = r.headers.get('Content-Type') || 'application/octet-stream';
       // Save to disk in background
-      fetch(`http://localhost:${serverPort}/api/tiles/cache?url=${encodeURIComponent(request.url)}`, {
+      fetch(`${self.location.origin}/api/tiles/cache?url=${encodeURIComponent(request.url)}`, {
         method: 'POST', body: body.slice(0)
       }).catch(() => {});
       return { body, ct };
