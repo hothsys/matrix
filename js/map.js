@@ -109,7 +109,7 @@ function _patchStyleWater(styleObj) {
   // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
   if (_mapStyle === 'dark') {
     // Darker water for Dark Map
-    const waterColor = '#131619';
+    const waterColor = '#17212b';
     for (const layer of styleObj.layers) {
       if (!layer.paint) layer.paint = {};
       if (layer.type === 'fill' && /^water/.test(layer.id)) {
@@ -357,10 +357,17 @@ function applyExtraLayers() {
 
 function apply3DBuildings() {
   if (!map.getSource || !map.getSource('openmaptiles')) return;
-  const shouldShow = buildings3DVisible && !['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle);
-  if (shouldShow && !map.getLayer('matrix-buildings-3d')) {
-    // Insert below the first symbol layer so road/POI labels render on top of buildings
-    const firstSymbol = map.getStyle()?.layers?.find(l => l.type === 'symbol');
+  const noBuildings = ['satellite', 'satellite3d', 'terrain3d', 'globe'];
+  const shouldShow = buildings3DVisible && !noBuildings.includes(_mapStyle);
+  // Toggle the style's native fill-extrusion layers (OpenFreeMap styles include 3D buildings)
+  const styleLayers = map.getStyle()?.layers || [];
+  const nativeExtrusions = styleLayers.filter(l => l.type === 'fill-extrusion' && l.id !== 'matrix-buildings-3d');
+  if (nativeExtrusions.length) {
+    const vis = shouldShow ? 'visible' : 'none';
+    nativeExtrusions.forEach(l => map.setLayoutProperty(l.id, 'visibility', vis));
+  } else if (shouldShow && !map.getLayer('matrix-buildings-3d')) {
+    // Style lacks native 3D buildings — add custom layer (e.g. dark mode)
+    const firstSymbol = styleLayers.find(l => l.type === 'symbol');
     map.addLayer({
       id: 'matrix-buildings-3d',
       type: 'fill-extrusion',

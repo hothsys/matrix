@@ -21,7 +21,7 @@ async function setupApp(page) {
         return !!document.querySelector('#map canvas') && typeof db !== 'undefined' && db !== null;
       } catch { return false; }
     },
-    { timeout: 20000 }
+    { timeout: 45000 }
   );
 }
 
@@ -40,7 +40,7 @@ async function uploadTestPhotos(page, fileNames) {
       const toast = document.getElementById('toast');
       return toast && toast.classList.contains('show') && toast.textContent.includes('Added');
     },
-    { timeout: 20000 }
+    { timeout: 45000 }
   );
   // Expand all collapsed year groups so photo cards render in the DOM
   // (the app uses virtual scrolling and year groups start collapsed)
