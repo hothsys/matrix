@@ -93,4 +93,25 @@ test.describe('Settings & Export/Import', () => {
     expect(imported).toBe(1);
     await expect(page.locator('#stat-photos')).toHaveText('1');
   });
+
+  test('empty map cache clears tiles and shows toast', async ({ page }) => {
+    // Pre-create a fake tile file so there's something to delete
+    await page.request.post(
+      '/api/tiles/cache?url=https://tiles.openfreemap.org/planet/test/0/0/0.pbf',
+      { data: Buffer.from('fake tile'), headers: { 'Content-Type': 'application/octet-stream' } }
+    );
+
+    await page.locator('.settings-btn').click();
+    await expect(page.locator('#settings-dropdown')).toHaveClass(/open/);
+
+    // Override the beforeEach dismiss handler to accept the confirmation dialog
+    page.removeAllListeners('dialog');
+    page.on('dialog', d => d.accept());
+
+    await page.locator('.settings-item', { hasText: 'Empty Map Cache' }).click();
+
+    // Success toast confirms tiles were removed
+    await expect(page.locator('#toast')).toContainText('Map cache cleared', { timeout: 5000 });
+    await expect(page.locator('#toast')).toHaveClass(/success/);
+  });
 });
