@@ -69,11 +69,13 @@
 - [Data persistence & migration](docs/persistence.md)
 - [Data storage internals](docs/data-storage.md)
 - [Tile caching architecture](docs/tile-caching.md)
+- [Synology NAS + Tailscale setup](docs/synology-setup.md)
 - [Keyboard shortcuts](docs/keyboard-shortcuts.md)
 - [Tips & features](docs/tips.md)
 - [Architecture](docs/architecture.md)
 - [Testing](docs/testing.md)
 - [Demo modes](docs/demo-mode.md)
+- [GitHub workflows](docs/github-workflows.md)
 
 ---
 
