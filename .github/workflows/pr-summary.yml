@@ -65,7 +65,7 @@ jobs:
                   messages: [
                     {
                       role: 'system',
-                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (3-5 sentences) describing the functional changes in this PR. For each major change, explain WHAT was changed and WHY. Focus on application behavior and user-facing impact, not CI/workflow/tooling changes. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR fixes..." not "I fixed..."). Be specific — name the features, functions, or components affected.'
+                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (2-4 sentences) describing the functional changes in this PR. For each major change, explain WHAT was changed and WHY. Focus on application behavior, not CI/workflow/tooling changes. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR fixes..." not "I fixed..."). Be specific — name the features, functions, or components affected. Never end with generic filler about "enhancing the user experience," "improving usability," or "overall" wrap-up sentences. Stop after stating the facts.'
                     },
                     {
                       role: 'user',
@@ -142,8 +142,6 @@ jobs:
               '## 📋 PR Summary',
               '',
               `**Title:** ${pr.title}`,
-              `**Author:** @${pr.user.login}`,
-              `**Draft:** ${pr.draft ? 'Yes' : 'No'}`,
               '',
               `**${files.length}** files changed: **+${pr.additions}** additions, **-${pr.deletions}** deletions`,
               '',
