@@ -29,6 +29,11 @@ const _geoCache = {};
 const _geoCountryCache = {};
 const _geoCodeCache = {};  // country codes (e.g. 'QA', 'US')
 let _lastNominatimCall = 0;
+async function nominatimThrottle() {
+  const wait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _lastNominatimCall = Date.now();
+}
 // pin picker state
 let pinPickerSel = new Set();
 let pinPickerCoords = null;
@@ -47,6 +52,23 @@ let _playbackIdx = 0;
 let _playbackTimer = null;
 
 function rebuildPhotoMap() { photoMap = new Map(photos.map(p => [p.id, p])); }
+
+function buildPlaybackStops() {
+  const dated = photos.filter(p => p.lat !== null && p.date)
+    .sort((a, b) => photoSortKey(a) < photoSortKey(b) ? -1 : 1);
+  const stops = [];
+  const seen = new Set();
+  for (const p of dated) {
+    const k = locKey(p);
+    if (seen.has(k)) {
+      stops.find(s => s.key === k).photoIds.push(p.id);
+    } else {
+      seen.add(k);
+      stops.push({ key: k, lat: p.lat, lng: p.lng, photoIds: [p.id] });
+    }
+  }
+  return stops;
+}
 
 function refreshAll(opts = {}) {
   rebuildPhotoMap();

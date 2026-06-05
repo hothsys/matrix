@@ -10,27 +10,11 @@ function togglePlayback() {
 }
 
 function startPlayback() {
-  // Build chronological sequence of pinned, dated photos grouped by location
-  const dated = photos.filter(p => p.lat !== null && p.date)
-    .sort((a, b) => photoSortKey(a) < photoSortKey(b) ? -1 : 1);
+  const stops = buildPlaybackStops();
 
-  if (dated.length < 2) {
+  if (stops.length < 2) {
     showToast('Need at least 2 dated pinned photos to play', 'warn');
     return;
-  }
-
-  // Group into stops by location, preserving chronological order
-  const stops = [];
-  const seen = new Set();
-  for (const p of dated) {
-    const k = locKey(p);
-    if (seen.has(k)) {
-      // Add to existing stop
-      stops.find(s => s.key === k).photoIds.push(p.id);
-    } else {
-      seen.add(k);
-      stops.push({ key: k, lat: p.lat, lng: p.lng, photoIds: [p.id] });
-    }
   }
 
   _playbackStops = stops;

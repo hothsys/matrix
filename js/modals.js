@@ -239,9 +239,7 @@ async function geocodePlace() {
   if (_isOffline) { showToast('Place lookup requires internet','error'); return; }
   showToast('Looking up…');
   try {
-    const geoWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
-    if (geoWait > 0) await new Promise(r => setTimeout(r, geoWait));
-    _lastNominatimCall = Date.now();
+    await nominatimThrottle();
     const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,{headers:{'Accept-Language':'en'}});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();

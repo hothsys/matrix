@@ -101,25 +101,11 @@ async function exportVideo() {
   if (_exporting || _playbackActive) return;
   if (_mapStyle === 'globe') { showToast('Export Video is not available in Globe mode', 'error'); return; }
 
-  // Build stops (same logic as startPlayback)
-  const dated = photos.filter(p => p.lat !== null && p.date)
-    .sort((a, b) => photoSortKey(a) < photoSortKey(b) ? -1 : 1);
+  const stops = buildPlaybackStops();
 
-  if (dated.length < 2) {
+  if (stops.length < 2) {
     showToast('Need at least 2 dated pinned photos to export', 'error');
     return;
-  }
-
-  const stops = [];
-  const seen = new Set();
-  for (const p of dated) {
-    const k = locKey(p);
-    if (seen.has(k)) {
-      stops.find(s => s.key === k).photoIds.push(p.id);
-    } else {
-      seen.add(k);
-      stops.push({ key: k, lat: p.lat, lng: p.lng, photoIds: [p.id] });
-    }
   }
 
   // Show overlay
@@ -366,7 +352,7 @@ async function exportVideo() {
 
   // Cleanup
   exportCleanup();
-  showToast(`Video exported (${(blob.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
+  showToast('Video exported', 'success');
 }
 
 function exportCleanup() {

@@ -124,9 +124,7 @@ function renderSearchResults(data) {
 // identically to forward search so it renders in the same dropdown
 async function runReverseGeoSearch(lat, lng) {
   try {
-    const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
-    if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));
-    _lastNominatimCall = Date.now();
+    await nominatimThrottle();
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=en`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
@@ -204,9 +202,7 @@ async function runCategorySearch(q, cat, cacheKey) {
 
   // --- Fallback: Nominatim bounded=1 + layer=poi (works everywhere, less precise) ---
   const viewbox = `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=1&layer=poi`;
-  const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
-  if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));
-  _lastNominatimCall = Date.now();
+  await nominatimThrottle();
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=20&addressdetails=1${viewbox}`,
@@ -254,9 +250,7 @@ async function runDestSearch(q) {
     return;
   }
   try {
-    const searchWait = Math.max(0, 1100 - (Date.now() - _lastNominatimCall));
-    if (searchWait > 0) await new Promise(r => setTimeout(r, searchWait));
-    _lastNominatimCall = Date.now();
+    await nominatimThrottle();
     // Pass viewbox to bias results toward visible region
     let viewbox = '';
     if (map && zoom >= 3) {

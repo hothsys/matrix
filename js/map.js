@@ -448,22 +448,22 @@ function initTheme() {
   }
   applyTheme();
 }
-function applyTheme() {
-  document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
-  _tileTemplatesCache = null;
-  // Set initial button label
-  const btn = document.getElementById('tb-style-btn');
-  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
-  if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
-
-  // Set initial active state in menu
-  document.querySelectorAll('.style-menu-item').forEach(el => el.classList.toggle('active', el.dataset.style === _mapStyle));
-  // Disable Export Video in Globe mode
+function _syncExportBtnState() {
   const exportBtn = document.getElementById('tb-export-video');
   if (exportBtn) {
     exportBtn.disabled = _mapStyle === 'globe';
     exportBtn.title = _mapStyle === 'globe' ? 'Export Video is not available in Globe mode' : 'Export trip animation as video';
   }
+}
+
+function applyTheme() {
+  document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
+  _tileTemplatesCache = null;
+  const btn = document.getElementById('tb-style-btn');
+  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
+  document.querySelectorAll('.style-menu-item').forEach(el => el.classList.toggle('active', el.dataset.style === _mapStyle));
+  _syncExportBtnState();
 }
 // Cache fetched style JSONs so switching between styles is instant after the first load
 const _styleJsonCache = {};
@@ -534,6 +534,113 @@ async function _doStyleSwap(style) {
   go();
 }
 
+function _initMapOverlays() {
+  const mapEl = document.getElementById('map');
+  const zoomEl = document.createElement('div');
+  zoomEl.id = 'zoom-debug';
+  zoomEl.style.cssText = 'position:absolute;bottom:24px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace';
+  mapEl.appendChild(zoomEl);
+  const pitchWrap = document.createElement('div');
+  pitchWrap.id = 'pitch-wrap';
+  pitchWrap.style.cssText = 'position:absolute;bottom:24px;left:70px;display:none;align-items:center;z-index:10;background:rgba(0,0,0,.6);border-radius:4px;font-family:monospace;font-size:11px;color:#fff';
+  const pitchEl = document.createElement('span');
+  pitchEl.id = 'pitch-debug';
+  pitchEl.style.cssText = 'padding:2px 6px;pointer-events:none';
+  const resetViewEl = document.createElement('button');
+  resetViewEl.id = 'reset-view-btn';
+  resetViewEl.title = 'Reset north';
+  resetViewEl.textContent = '⊙';
+  resetViewEl.style.cssText = 'background:none;color:#fff;font-size:15px;border:none;border-left:1px solid rgba(255,255,255,.2);cursor:pointer;padding:0 6px;font-family:monospace;display:none;line-height:1';
+  resetViewEl.addEventListener('click', () => { map.easeTo({ bearing: 0, duration: 500 }); });
+  pitchWrap.appendChild(pitchEl);
+  pitchWrap.appendChild(resetViewEl);
+  mapEl.appendChild(pitchWrap);
+  const exaggerationEl = document.createElement('div');
+  exaggerationEl.id = 'exaggeration-ctrl';
+  exaggerationEl.style.cssText = 'position:absolute;bottom:24px;left:310px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
+  exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.2" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.2×</span>';
+  mapEl.appendChild(exaggerationEl);
+  document.getElementById('exaggeration-slider').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    document.getElementById('exaggeration-val').textContent = val.toFixed(1) + '×';
+    if (map.getTerrain()) map.setTerrain({ source: 'terrain-dem', exaggeration: val });
+  });
+  const coordsEl = document.createElement('div');
+  coordsEl.id = 'coords-debug';
+  coordsEl.style.cssText = 'position:absolute;bottom:24px;right:50px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace;display:none';
+  mapEl.appendChild(coordsEl);
+  map.on('mousemove', (e) => {
+    coordsEl.textContent = `${e.lngLat.lat.toFixed(4)}°, ${e.lngLat.lng.toFixed(4)}°`;
+    coordsEl.style.display = '';
+  });
+  map.getCanvas().addEventListener('mouseout', () => { coordsEl.style.display = 'none'; });
+  const updateZoom = () => {
+    zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
+    const is3D = _mapStyle === 'terrain3d' || _mapStyle === 'satellite3d';
+    if (is3D) {
+      pitchWrap.style.display = 'flex';
+      pitchEl.textContent = `p${map.getPitch().toFixed(0)}° b${map.getBearing().toFixed(0)}°`;
+      const tilted = Math.abs(map.getBearing()) > 1;
+      resetViewEl.style.display = tilted ? '' : 'none';
+    } else {
+      pitchWrap.style.display = 'none';
+    }
+    const exCtrl = document.getElementById('exaggeration-ctrl');
+    if (exCtrl) exCtrl.style.display = is3D ? 'flex' : 'none';
+  };
+  map.on('zoom', updateZoom);
+  map.on('pitch', updateZoom);
+  map.on('rotate', updateZoom);
+  map.on('moveend', updateZoom);
+  map.on('moveend', _onMapMoveForSearch);
+  updateZoom();
+}
+
+function _initMapControls() {
+  normalizeDarkLabels();
+  raiseLabelsAboveRoads();
+  const ctrlContainer = document.querySelector('.maplibregl-ctrl-bottom-right');
+  const navGroup = ctrlContainer?.querySelector('.maplibregl-ctrl-group');
+  if (ctrlContainer && navGroup) {
+    const wrap = document.createElement('div');
+    wrap.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    wrap.id = 'labels-toggle-wrap';
+    const btn = document.createElement('button');
+    btn.id = 'labels-toggle-btn';
+    btn.type = 'button';
+    btn.className = 'maplibregl-ctrl-labels';
+    btn.title = labelsVisible ? 'Hide labels' : 'Show labels';
+    btn.setAttribute('aria-label', 'Toggle labels');
+    btn.style.opacity = labelsVisible ? '1' : '.4';
+    btn.innerHTML = '<span style="font-size:13px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">Aa</span>';
+    btn.addEventListener('click', toggleLabels);
+    wrap.appendChild(btn);
+    navGroup.after(wrap);
+
+    const bldgWrap = document.createElement('div');
+    bldgWrap.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    bldgWrap.id = 'buildings-toggle-wrap';
+    const bldgBtn = document.createElement('button');
+    bldgBtn.id = 'tb-3d-buildings';
+    bldgBtn.type = 'button';
+    bldgBtn.title = '3D Buildings (zoom 15+)';
+    bldgBtn.setAttribute('aria-label', 'Toggle 3D buildings');
+    bldgBtn.style.opacity = buildings3DVisible ? '1' : '.4';
+    bldgBtn.innerHTML = '<span style="font-size:11px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">3D</span>';
+    bldgBtn.addEventListener('click', toggle3DBuildings);
+    bldgWrap.appendChild(bldgBtn);
+    if (['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle)) bldgWrap.style.display = 'none';
+    navGroup.before(bldgWrap);
+  }
+  applyLabelScale();
+  applyLabelVisibility();
+  applyExtraLayers();
+  _applyTerrainAndProjection();
+  const tileSpinner = document.getElementById('tile-spinner');
+  map.on('dataloading', () => { tileSpinner?.classList.add('active'); });
+  map.on('idle', () => { tileSpinner?.classList.remove('active'); });
+}
+
 async function initMap() {
   initTheme();
   // Fetch and patch style JSON before creating the map to prevent halo flash
@@ -589,113 +696,8 @@ async function initMap() {
   map.on('load', () => {
     addPinLayers();
     map.on('moveend', refreshClusters);
-    // Debug: zoom level indicator
-    const zoomEl = document.createElement('div');
-    zoomEl.id = 'zoom-debug';
-    zoomEl.style.cssText = 'position:absolute;bottom:24px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace';
-    document.getElementById('map').appendChild(zoomEl);
-    const pitchWrap = document.createElement('div');
-    pitchWrap.id = 'pitch-wrap';
-    pitchWrap.style.cssText = 'position:absolute;bottom:24px;left:70px;display:none;align-items:center;z-index:10;background:rgba(0,0,0,.6);border-radius:4px;font-family:monospace;font-size:11px;color:#fff';
-    const pitchEl = document.createElement('span');
-    pitchEl.id = 'pitch-debug';
-    pitchEl.style.cssText = 'padding:2px 6px;pointer-events:none';
-    const resetViewEl = document.createElement('button');
-    resetViewEl.id = 'reset-view-btn';
-    resetViewEl.title = 'Reset north';
-    resetViewEl.textContent = '⊙';
-    resetViewEl.style.cssText = 'background:none;color:#fff;font-size:15px;border:none;border-left:1px solid rgba(255,255,255,.2);cursor:pointer;padding:0 6px;font-family:monospace;display:none;line-height:1';
-    resetViewEl.addEventListener('click', () => { map.easeTo({ bearing: 0, duration: 500 }); });
-    pitchWrap.appendChild(pitchEl);
-    pitchWrap.appendChild(resetViewEl);
-    document.getElementById('map').appendChild(pitchWrap);
-    const exaggerationEl = document.createElement('div');
-    exaggerationEl.id = 'exaggeration-ctrl';
-    exaggerationEl.style.cssText = 'position:absolute;bottom:24px;left:310px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;z-index:10;font-family:monospace;display:none;align-items:center;gap:6px';
-    exaggerationEl.innerHTML = '⛰ <input type="range" id="exaggeration-slider" min="1" max="3" step="0.1" value="1.2" style="width:70px;accent-color:#fff;vertical-align:middle"> <span id="exaggeration-val">1.2×</span>';
-    document.getElementById('map').appendChild(exaggerationEl);
-    document.getElementById('exaggeration-slider').addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value);
-      document.getElementById('exaggeration-val').textContent = val.toFixed(1) + '×';
-      if (map.getTerrain()) map.setTerrain({ source: 'terrain-dem', exaggeration: val });
-    });
-    // Live GPS coordinates on mouse move
-    const coordsEl = document.createElement('div');
-    coordsEl.id = 'coords-debug';
-    coordsEl.style.cssText = 'position:absolute;bottom:24px;right:50px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:10;pointer-events:none;font-family:monospace;display:none';
-    document.getElementById('map').appendChild(coordsEl);
-    map.on('mousemove', (e) => {
-      coordsEl.textContent = `${e.lngLat.lat.toFixed(4)}°, ${e.lngLat.lng.toFixed(4)}°`;
-      coordsEl.style.display = '';
-    });
-    map.getCanvas().addEventListener('mouseout', () => { coordsEl.style.display = 'none'; });
-    const updateZoom = () => {
-      zoomEl.textContent = 'z' + map.getZoom().toFixed(2);
-      const is3D = _mapStyle === 'terrain3d' || _mapStyle === 'satellite3d';
-      if (is3D) {
-        pitchWrap.style.display = 'flex';
-        pitchEl.textContent = `p${map.getPitch().toFixed(0)}° b${map.getBearing().toFixed(0)}°`;
-        const tilted = Math.abs(map.getBearing()) > 1;
-        resetViewEl.style.display = tilted ? '' : 'none';
-      } else {
-        pitchWrap.style.display = 'none';
-      }
-      const exCtrl = document.getElementById('exaggeration-ctrl');
-      if (exCtrl) exCtrl.style.display = is3D ? 'flex' : 'none';
-    };
-    map.on('zoom', updateZoom);
-    map.on('pitch', updateZoom);
-    map.on('rotate', updateZoom);
-    map.on('moveend', updateZoom);
-    map.on('moveend', _onMapMoveForSearch);
-    updateZoom();
-    normalizeDarkLabels();
-    raiseLabelsAboveRoads();
-    // Inject labels toggle as its own control group above the zoom controls
-    const ctrlContainer = document.querySelector('.maplibregl-ctrl-bottom-right');
-    const navGroup = ctrlContainer?.querySelector('.maplibregl-ctrl-group');
-    if (ctrlContainer && navGroup) {
-      const wrap = document.createElement('div');
-      wrap.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-      wrap.id = 'labels-toggle-wrap';
-      const btn = document.createElement('button');
-      btn.id = 'labels-toggle-btn';
-      btn.type = 'button';
-      btn.className = 'maplibregl-ctrl-labels';
-      btn.title = labelsVisible ? 'Hide labels' : 'Show labels';
-      btn.setAttribute('aria-label', 'Toggle labels');
-      btn.style.opacity = labelsVisible ? '1' : '.4';
-      btn.innerHTML = '<span style="font-size:13px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">Aa</span>';
-      btn.addEventListener('click', toggleLabels);
-      wrap.appendChild(btn);
-      navGroup.after(wrap);
-
-      // 3D Buildings toggle — inserted before navGroup so it appears above zoom controls
-      const bldgWrap = document.createElement('div');
-      bldgWrap.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-      bldgWrap.id = 'buildings-toggle-wrap';
-      const bldgBtn = document.createElement('button');
-      bldgBtn.id = 'tb-3d-buildings';
-      bldgBtn.type = 'button';
-      bldgBtn.title = '3D Buildings (zoom 15+)';
-      bldgBtn.setAttribute('aria-label', 'Toggle 3D buildings');
-      bldgBtn.style.opacity = buildings3DVisible ? '1' : '.4';
-      bldgBtn.innerHTML = '<span style="font-size:11px;font-weight:700;line-height:29px;display:block;color:var(--text);opacity:.7;font-family:var(--font)">3D</span>';
-      bldgBtn.addEventListener('click', toggle3DBuildings);
-      bldgWrap.appendChild(bldgBtn);
-      if (['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle)) bldgWrap.style.display = 'none';
-      navGroup.before(bldgWrap);
-    }
-    applyLabelScale();
-    applyLabelVisibility();
-    applyExtraLayers();
-    _applyTerrainAndProjection();
-    // Tile loading spinner
-    const tileSpinner = document.getElementById('tile-spinner');
-    map.on('dataloading', () => { tileSpinner?.classList.add('active'); });
-    map.on('idle', () => {
-      tileSpinner?.classList.remove('active');
-    });
+    _initMapOverlays();
+    _initMapControls();
   });
   map.on('movestart', () => { _mapBusy = true; });
   map.on('moveend', () => { _mapBusy = false; });
@@ -894,12 +896,7 @@ function setMapStyle(mode) {
   const bldgWrap = document.getElementById('buildings-toggle-wrap');
   if (bldgWrap) bldgWrap.style.display = ['satellite', 'satellite3d', 'terrain3d', 'globe'].includes(_mapStyle) ? 'none' : '';
 
-  // Disable Export Video in Globe mode (flyTo animation doesn't translate to globe projection)
-  const exportBtn = document.getElementById('tb-export-video');
-  if (exportBtn) {
-    exportBtn.disabled = _mapStyle === 'globe';
-    exportBtn.title = _mapStyle === 'globe' ? 'Export Video is not available in Globe mode' : 'Export trip animation as video';
-  }
+  _syncExportBtnState();
 
   // Update button label
   const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
