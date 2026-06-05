@@ -39,6 +39,7 @@ async function processFiles(files) {
   showProg(true);
   let ok=0, pinned=0, dupes=0;
   const BATCH = 4;
+  const existingDks = new Set(photos.map(p => p._dk));
 
   for (let i=0; i<arr.length; i+=BATCH) {
     const batch = arr.slice(i, i + BATCH);
@@ -46,7 +47,7 @@ async function processFiles(files) {
 
     const results = await Promise.all(batch.map(async (f) => {
       const dk = `${f.name}_${f.size}`;
-      if (photos.find(p => p._dk===dk)) return { dup: true };
+      if (existingDks.has(dk)) return { dup: true };
       try {
         const result = await processFileInWorker(f);
         if (!result.ok) return { err: true };
@@ -87,6 +88,7 @@ async function processFiles(files) {
         addedAt: Date.now(), _dk: r.dk
       };
       photos.push(photo);
+      existingDks.add(r.dk);
       await dbPut('photos', photo);
       if (photo.lat !== null) pinned++;
       ok++;

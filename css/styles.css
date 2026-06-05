@@ -7,7 +7,7 @@
   --accent2:#e8774a;--green:#4ec98a;
   --text:#e4e7f2;--muted:#7a829c;--muted2:#555d78;
   --radius:12px;--shadow:0 8px 40px rgba(0,0,0,.55);
-  --font:'Josefin Sans',sans-serif;--font-serif:'Josefin Sans',sans-serif;
+  --font:'Josefin Sans',sans-serif;
 }
 html{font-size:19px}
 html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
@@ -26,7 +26,7 @@ input,textarea,select{font-family:var(--font)}
 .sidebar-header{padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .logo-mark{width:56px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .logo-mark svg{width:100%;height:100%;fill:var(--accent)}
-.logo-text{font-family:var(--font-serif);font-size:1.15rem;font-weight:600;letter-spacing:-.02em}
+.logo-text{font-family:var(--font);font-size:1.15rem;font-weight:600;letter-spacing:-.02em}
 .logo-text span{color:var(--accent)}
 
 /* 3-tab sidebar */
@@ -360,13 +360,12 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.5}
 #export-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);align-items:center;justify-content:center}
 #export-overlay.open{display:flex}
 .export-overlay-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 40px;text-align:center;box-shadow:0 12px 60px rgba(0,0,0,.6);min-width:320px}
-.export-overlay-title{font-family:var(--font-serif);font-size:1.2rem;font-weight:600;color:var(--text);margin-bottom:8px}
+.export-overlay-title{font-family:var(--font);font-size:1.2rem;font-weight:600;color:var(--text);margin-bottom:8px}
 .export-overlay-progress{font-size:.78rem;color:var(--muted);margin-bottom:16px}
 .export-overlay-bar-wrap{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
 .export-overlay-bar{height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width .3s ease}
 .export-cancel-btn{margin-top:16px;background:none;border:1px solid var(--border2);color:var(--muted);padding:6px 20px;border-radius:8px;font-size:.75rem;cursor:pointer;transition:color .15s,border-color .15s}
 .export-cancel-btn:hover{color:var(--text);border-color:var(--text)}
-#tb-export-video.recording{color:var(--accent2)}
 
 /* TOAST */
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);padding:8px 16px;border-radius:28px;font-size:.74rem;box-shadow:var(--shadow);z-index:999;transition:transform .28s ease;pointer-events:none}

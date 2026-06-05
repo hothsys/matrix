@@ -315,11 +315,7 @@ async function reverseGeocode(lat, lng) {
   const cacheKey = `${key}_z${nomZoom}`;
   if (_geoCache[cacheKey]) return _geoCache[cacheKey];
   if (_isOffline) return null;
-  // Rate-limit: ensure at least 1.1s between Nominatim calls
-  const now = Date.now();
-  const wait = Math.max(0, 1100 - (now - _lastNominatimCall));
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  _lastNominatimCall = Date.now();
+  await nominatimThrottle();
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=${nomZoom}&accept-language=en`);
     if (!r.ok) { console.warn('reverse geocode HTTP', r.status); return null; }
