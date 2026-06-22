@@ -6,14 +6,15 @@ function photoSortKey(p) {
   return '9999-99-99T' + String(p.addedAt).padStart(16,'0');
 }
 
-// Track expanded year groups across rebuilds (Photos and Timeline independent)
-const _expandedYears = new Set();
+// Track expanded groups across rebuilds
+const _expandedDecades = new Set(); // decade-level collapse (Photos tab)
+const _expandedYears = new Set();   // year-level collapse (Photos tab)
 const _tlCollapsedYears = new Set();
 
 function _syncCollapseBtn(tab) {
   if (tab === 'photos') {
     const btn = document.getElementById('photos-collapse-all');
-    const allExpanded = _yearEntries.length > 0 && _yearEntries.every(e => _expandedYears.has(e.yr));
+    const allExpanded = _decadeEntries.length > 0 && _decadeEntries.every(e => _expandedDecades.has(e.yr));
     if (btn) btn.classList.toggle('all-collapsed', !allExpanded);
   } else {
     const btn = document.getElementById('tl-collapse-all');
@@ -25,15 +26,20 @@ function _syncCollapseBtn(tab) {
 
 function toggleAllYears(tab) {
   if (tab === 'photos') {
-    const allExpanded = _yearEntries.length > 0 && _yearEntries.every(e => _expandedYears.has(e.yr));
-    _yearEntries.forEach(e => {
-      const hdr = e.group.querySelector('.year-hdr');
+    const allExpanded = _decadeEntries.length > 0 && _decadeEntries.every(e => _expandedDecades.has(e.yr));
+    _decadeEntries.forEach(e => {
+      const hdr = e.group.querySelector(':scope > .year-hdr');
       if (allExpanded) {
-        _expandedYears.delete(e.yr);
-        hdr.classList.add('collapsed');
+        _expandedDecades.delete(e.yr);
+        if (hdr) hdr.classList.add('collapsed');
       } else {
-        _expandedYears.add(e.yr);
-        hdr.classList.remove('collapsed');
+        _expandedDecades.add(e.yr);
+        if (hdr) hdr.classList.remove('collapsed');
+        // Also expand all years inside this decade
+        e.group.querySelectorAll('.year-group > .year-hdr.collapsed').forEach(yh => {
+          yh.classList.remove('collapsed');
+          _expandedYears.add(yh.querySelector('.year-hdr-label').textContent);
+        });
       }
     });
     const btn = document.getElementById('photos-collapse-all');
@@ -56,7 +62,7 @@ function toggleAllYears(tab) {
   }
 }
 
-let _yearEntries = [];
+let _decadeEntries = [];
 
 function rebuildPhotoList() {
   const list = document.getElementById('photos-list');
@@ -65,42 +71,92 @@ function rebuildPhotoList() {
   const sorted = photos.filter(p => !p.isEmptyPin).sort((a,b) => photoSortKey(a) < photoSortKey(b) ? -1 : 1);
   if (!sorted.length) {
     list.innerHTML = `<div class="empty-state"><div class="big">🌍</div>Add photos to build your travel map</div>`;
-    _yearEntries = [];
+    _decadeEntries = [];
     return;
   }
-  const byYear = {};
+
+  // Group: decade → year → photos
+  const byDecade = {};
   sorted.forEach(p => {
-    const yr = p.date ? p.date.slice(0,4) : 'Undated';
-    (byYear[yr] = byYear[yr] || []).push(p);
+    const yr = p.date ? p.date.slice(0,4) : null;
+    if (!yr) {
+      (byDecade['Undated'] = byDecade['Undated'] || {})['Undated'] = byDecade['Undated']?.['Undated'] || [];
+      byDecade['Undated']['Undated'].push(p);
+      return;
+    }
+    const dk = String(Math.floor(parseInt(yr) / 10) * 10);
+    if (!byDecade[dk]) byDecade[dk] = {};
+    if (!byDecade[dk][yr]) byDecade[dk][yr] = [];
+    byDecade[dk][yr].push(p);
   });
-  const years = Object.keys(byYear).sort((a,b) => {
+
+  const decades = Object.keys(byDecade).sort((a,b) => {
     if (a === 'Undated') return 1;
     if (b === 'Undated') return -1;
-    return a < b ? -1 : 1;
+    return parseInt(a) < parseInt(b) ? -1 : 1;
   });
-  _yearEntries = [];
+
+  _decadeEntries = [];
   const frag = document.createDocumentFragment();
-  years.forEach(yr => {
-    const group = document.createElement('div');
-    group.className = 'year-group';
-    const hdr = document.createElement('div');
-    hdr.className = _expandedYears.has(yr) ? 'year-hdr' : 'year-hdr collapsed';
-    hdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${byYear[yr].length}</span><span class="year-hdr-line"></span>`;
-    group.appendChild(hdr);
-    const body = document.createElement('div');
-    body.className = 'year-body';
-    byYear[yr].forEach(p => body.appendChild(_makeCard(p)));
-    group.appendChild(body);
-    frag.appendChild(group);
-    const entry = { yr, group };
-    hdr.addEventListener('click', () => {
-      hdr.classList.toggle('collapsed');
-      if (hdr.classList.contains('collapsed')) _expandedYears.delete(yr);
-      else _expandedYears.add(yr);
+
+  decades.forEach(dk => {
+    const isUndated = dk === 'Undated';
+    const decadeLabel = isUndated ? 'Undated' : `${dk} – ${parseInt(dk) + 9}`;
+
+    // Total count across all years in this decade
+    let totalCount = 0;
+    Object.values(byDecade[dk]).forEach(arr => { totalCount += arr.length; });
+
+    const decadeGroup = document.createElement('div');
+    decadeGroup.className = 'year-group';
+
+    const decadeHdr = document.createElement('div');
+    decadeHdr.className = _expandedDecades.has(dk) ? 'year-hdr' : 'year-hdr collapsed';
+    decadeHdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${decadeLabel}</span><span class="year-hdr-count">${totalCount}</span><span class="year-hdr-line"></span>`;
+    decadeGroup.appendChild(decadeHdr);
+
+    const decadeBody = document.createElement('div');
+    decadeBody.className = 'year-body';
+
+    const yearKeys = Object.keys(byDecade[dk]).sort();
+    const yearEntries = [];
+    yearKeys.forEach(yr => {
+      const yearGroup = document.createElement('div');
+      yearGroup.className = 'year-group';
+
+      const yearHdr = document.createElement('div');
+      yearHdr.className = _expandedYears.has(yr) ? 'year-hdr' : 'year-hdr collapsed';
+      yearHdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${byDecade[dk][yr].length}</span><span class="year-hdr-line"></span>`;
+      yearGroup.appendChild(yearHdr);
+
+      const yearBody = document.createElement('div');
+      yearBody.className = 'year-body';
+      byDecade[dk][yr].forEach(p => yearBody.appendChild(_makeCard(p)));
+      yearGroup.appendChild(yearBody);
+
+      yearHdr.addEventListener('click', () => {
+        yearHdr.classList.toggle('collapsed');
+        if (yearHdr.classList.contains('collapsed')) _expandedYears.delete(yr);
+        else _expandedYears.add(yr);
+      });
+
+      decadeBody.appendChild(yearGroup);
+      yearEntries.push({ yr, hdr: yearHdr, body: yearBody });
+    });
+
+    decadeGroup.appendChild(decadeBody);
+    frag.appendChild(decadeGroup);
+
+    decadeHdr.addEventListener('click', () => {
+      decadeHdr.classList.toggle('collapsed');
+      if (decadeHdr.classList.contains('collapsed')) _expandedDecades.delete(dk);
+      else _expandedDecades.add(dk);
       _syncCollapseBtn('photos');
     });
-    _yearEntries.push(entry);
+
+    _decadeEntries.push({ yr: dk, group: decadeGroup, years: yearEntries });
   });
+
   list.innerHTML = '';
   list.appendChild(frag);
   if (scrollParent) scrollParent.scrollTop = scrollTop;
@@ -151,16 +207,21 @@ function focusPhoto(id) {
 
 function highlightCard(id) {
   document.querySelectorAll('.photo-card.active').forEach(c => c.classList.remove('active'));
-  for (const entry of _yearEntries) {
-    if (!_expandedYears.has(entry.yr)) {
-      const body = entry.group.querySelector('.year-body');
-      const card = body.querySelector(`#card_${id}`);
+  outer: for (const de of _decadeEntries) {
+    for (const ye of de.years) {
+      const card = ye.body.querySelector(`#card_${id}`);
       if (card) {
-        _expandedYears.add(entry.yr);
-        const hdr = entry.group.querySelector('.year-hdr');
-        if (hdr) hdr.classList.remove('collapsed');
+        if (!_expandedDecades.has(de.yr)) {
+          _expandedDecades.add(de.yr);
+          const dhdr = de.group.querySelector(':scope > .year-hdr');
+          if (dhdr) dhdr.classList.remove('collapsed');
+        }
+        if (!_expandedYears.has(ye.yr)) {
+          _expandedYears.add(ye.yr);
+          ye.hdr.classList.remove('collapsed');
+        }
         _syncCollapseBtn('photos');
-        break;
+        break outer;
       }
     }
   }
