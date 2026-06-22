@@ -714,6 +714,12 @@ def _run_tests(port):
 
 
 if __name__ == "__main__":
+    if os.environ.get('MATRIX_RENAMED') != '1':
+        os.environ['MATRIX_RENAMED'] = '1'
+        try:
+            os.execv(sys.executable, [sys.executable, '-X', 'matrix'] + sys.argv)
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description='Matrix Local Server')
     parser.add_argument('port', nargs='?', type=int, default=8765, help='Port number (default: 8765)')
     parser.add_argument('--run-tests', action='store_true', help='Run Playwright integration tests')
