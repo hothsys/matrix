@@ -2,14 +2,18 @@
 
 All data storage is cross-browser (Chrome, Firefox, Safari) — none depends on the service worker.
 
-| Storage | What it stores | Purpose | Cross-browser |
-|---|---|---|---|
-| **IndexedDB** | Photo objects (full-size base64 image + thumbnail + all metadata), album objects, geo caches | Primary data store — the app reads from here on every load | Yes |
-| **Disk (matrix-data.json)** | JSON dump of all IndexedDB content | Backup that survives browser data clearing; auto-saved by `serve.py` | Yes |
-| **Disk (matrix-photos/)** | Individual image files (`{id}.jpg`, `{id}_thumb.jpg`) extracted from base64 | Used by the export flow (avoids embedding huge base64 in JSON) and for lightbox display after import | Yes |
+| Storage | What it stores | Purpose |
+|---|---|---|
+| **matrix-photos/** | Full-size images (`{id}.jpg`) and thumbnails (`{id}_thumb.jpg`) | Source of truth for image data — written on upload, served directly for display |
+| **IndexedDB** | Photo metadata (coords, date, camera, notes) + file path references to `matrix-photos/`, album objects | Source of truth for metadata — the app reads from here on every load |
+| **matrix-data.json** | JSON backup of metadata, albums, and geo caches (file paths, not image data) | Backup that survives browser data clearing; auto-saved by `serve.py` |
 
-**IndexedDB** is the source of truth during normal use. `matrix-data.json` and `matrix-photos/` are redundant backups maintained by `serve.py`. If you clear browser data, the app offers to restore from `matrix-data.json` on next load.
+## How it works
 
-## Scalability note
+**Image data** lives on disk in `matrix-photos/`. IndexedDB stores only metadata and a path reference (e.g. `matrix-photos/p_123.jpg`), keeping the database lean (~50KB/photo vs ~4MB with embedded base64). This lets the app handle tens of thousands of photos without bloating browser storage.
 
-IndexedDB currently stores full-size images as base64 inside each photo record. At scale (thousands of large photos), this can cause high memory usage at startup since all records are loaded into memory. A future refactor will move full-size images to `matrix-photos/` only, keeping IndexedDB lean (metadata + thumbnails). See the [planned refactor](../plans/reactive-bubbling-creek.md) for details.
+**On upload**, `processFiles()` saves the full-size image to disk via `POST /api/photos/{id}`, verifies the file is servable, then stores the file path in IndexedDB.
+
+**On load**, the app reads metadata from IndexedDB and references images by their disk paths. If IndexedDB is empty (e.g. after clearing browser data), the app offers to restore metadata from `matrix-data.json`. The image files in `matrix-photos/` remain intact regardless.
+
+**Auto-save** (`scheduleAutoSave()`) writes metadata to `matrix-data.json` via `POST /api/data` after any data-modifying action. This file contains file paths — not image data — so it stays small.
