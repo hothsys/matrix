@@ -290,6 +290,8 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         try:
             if self.path == "/api/data":
                 self._serve_data()
+            elif self.path == "/api/tiles/size":
+                self._tile_cache_size()
             elif self.path.startswith("/api/tiles/proxy?"):
                 self._proxy_tile()
             elif self.path.startswith("/api/video/download?"):
@@ -631,6 +633,24 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
+
+    def _tile_cache_size(self):
+        total = 0
+        count = 0
+        if os.path.isdir(TILES_DIR):
+            for root, _, fnames in os.walk(TILES_DIR):
+                for fn in fnames:
+                    if fn.startswith('.'):
+                        continue
+                    try:
+                        total += os.stat(os.path.join(root, fn)).st_size
+                        count += 1
+                    except OSError:
+                        pass
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'bytes': total, 'files': count, 'limitMB': MAX_TILES_MB}).encode())
 
     def _clear_tile_cache(self):
         """Wipe the entire matrix-tiles directory and recreate it empty for a clean state."""

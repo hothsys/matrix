@@ -122,6 +122,15 @@ function toggleSettingsMenu(e) {
   const dd = document.getElementById('settings-dropdown');
   dd.classList.toggle('open');
   updateAutoSaveIndicator();
+  if (dd.classList.contains('open')) updateCacheSizeStatus();
+}
+
+function updateCacheSizeStatus() {
+  fetch('/api/tiles/size').then(r => r.json()).then(d => {
+    const mb = (d.bytes / (1024 * 1024)).toFixed(0);
+    const el = document.getElementById('cache-size-status');
+    if (el) el.textContent = `${mb} MB used (${d.limitMB} MB limit)`;
+  }).catch(() => {});
 }
 document.addEventListener('click', e => {
   if (!e.target.closest('.settings-btn') && !e.target.closest('.settings-dropdown')) {
@@ -161,6 +170,7 @@ async function emptyTileCache() {
       const tileCacheName = cacheNames.find(n => n.endsWith('-tiles'));
       if (tileCacheName) await caches.delete(tileCacheName);
       showToast(`Map cache cleared — ${d.removed} file${d.removed !== 1 ? 's' : ''} removed`, 'success');
+      updateCacheSizeStatus();
     } else {
       showToast('Failed to clear map cache', 'error');
     }
