@@ -226,6 +226,7 @@ input,textarea,select{font-family:var(--font)}
 .dest-item-icon{flex-shrink:0;color:var(--accent);margin-top:1px}
 .dest-item-name{font-weight:500;color:var(--text)}
 .dest-item-detail{font-size:.66rem;color:var(--muted);margin-top:1px}
+.dest-divider{padding:5px 12px;font-size:.66rem;color:var(--muted);border-top:1px solid var(--border);font-weight:500;letter-spacing:.02em}
 #dest-loading{padding:10px 12px;font-size:.73rem;color:var(--muted);display:none}
 #search-cat-wrap{position:relative}
 #search-cat-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:.73rem;font-weight:500;padding:5px 10px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:all .15s;line-height:1}

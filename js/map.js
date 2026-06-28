@@ -86,7 +86,7 @@ function _patchStyleBoundaries(styleObj) {
         layer.filter = noMaritime;
       }
       if (!layer.paint) layer.paint = {};
-      layer.paint['line-color'] = 'rgba(140,160,190,0.18)';
+      layer.paint['line-color'] = 'rgba(140,160,190,0.28)';
     }
   }
 }
@@ -593,6 +593,7 @@ function _initMapOverlays() {
   map.on('rotate', updateZoom);
   map.on('moveend', updateZoom);
   map.on('moveend', _onMapMoveForSearch);
+  map.on('moveend', _onMapMoveForPrefetch);
   updateZoom();
 }
 
