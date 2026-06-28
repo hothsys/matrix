@@ -11,6 +11,12 @@ const _searchCache = {};
 let _searchMoveTimer = null;
 let _searchCategory = 'all';
 
+// POI prefetch cache — Overpass results for the current viewport at zoom 10+
+let _poiCache = [];
+let _poiCacheBbox = null;
+let _poiFetchInFlight = false;
+let _poiPrefetchTimer = null;
+
 const POI_CATEGORIES = {
   hotel:      { label: '🏨 Hotel',      tags: [['amenity','hotel'],['tourism','hotel']] },
   restaurant: { label: '🍽 Restaurant', tags: [['amenity','restaurant'],['amenity','cafe'],['amenity','bar'],['amenity','pub'],['amenity','fast_food']] },
@@ -47,6 +53,71 @@ function _onMapMoveForSearch() {
   _searchMoveTimer = setTimeout(() => runDestSearch(q), 600);
 }
 
+// POI prefetch — fetch named POIs in the viewport at zoom 10+ for instant local search
+function _onMapMoveForPrefetch() {
+  clearTimeout(_poiPrefetchTimer);
+  if (!map || _isOffline) return;
+  if (map.getZoom() < 10) { _poiCache = []; _poiCacheBbox = null; return; }
+  _poiPrefetchTimer = setTimeout(_prefetchPOIs, 1500);
+}
+
+function _bboxOverlap(a, b) {
+  if (!a || !b) return 0;
+  const intW = Math.max(a.west, b.west), intE = Math.min(a.east, b.east);
+  const intS = Math.max(a.south, b.south), intN = Math.min(a.north, b.north);
+  if (intW >= intE || intS >= intN) return 0;
+  const intArea = (intE - intW) * (intN - intS);
+  const aArea = (a.east - a.west) * (a.north - a.south);
+  return aArea > 0 ? intArea / aArea : 0;
+}
+
+async function _prefetchPOIs() {
+  if (!map || _poiFetchInFlight || _isOffline || map.getZoom() < 10) return;
+  const b = map.getBounds();
+  const bbox = { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() };
+  if (_bboxOverlap(bbox, _poiCacheBbox) > 0.5) return;
+
+  _poiFetchInFlight = true;
+  const bboxStr = `(${bbox.south.toFixed(5)},${bbox.west.toFixed(5)},${bbox.north.toFixed(5)},${bbox.east.toFixed(5)})`;
+  const poiTags = ['tourism', 'amenity', 'leisure', 'historic'];
+  const placeTags = ['village', 'hamlet', 'town', 'isolated_dwelling', 'neighbourhood'];
+  const stmts = [
+    ...poiTags.flatMap(tag => [
+      `node["name"]["${tag}"]${bboxStr};`,
+      `way["name"]["${tag}"]${bboxStr};`,
+    ]),
+    ...placeTags.map(v => `node["place"="${v}"]["name"]${bboxStr};`),
+  ].join('\n  ');
+  const query = `[out:json][timeout:12];\n(\n  ${stmts}\n);\nout center 200;`;
+  try {
+    const r = await fetch('/api/overpass', { method: 'POST', body: new URLSearchParams({ data: query }) });
+    if (!r.ok) { _poiFetchInFlight = false; return; }
+    const data = await r.json();
+    _poiCache = (data.elements || [])
+      .filter(el => el.tags?.name)
+      .map(el => {
+        const t = el.tags, lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
+        if (lat == null || lon == null) return null;
+        const city = t['addr:city'] || t['addr:town'] || t['addr:village'] || '';
+        const country = t['addr:country'] || '';
+        return {
+          display_name: [t.name, city, country].filter(Boolean).join(', '),
+          lat: String(lat), lon: String(lon),
+          address: { city, country, country_code: (country || '').toLowerCase() }
+        };
+      })
+      .filter(Boolean);
+    _poiCacheBbox = bbox;
+  } catch(_) { /* proxy unreachable — leave cache as-is */ }
+  _poiFetchInFlight = false;
+}
+
+function _filterPOICache(q) {
+  if (!_poiCache.length || !q) return [];
+  const lower = q.toLowerCase();
+  return _poiCache.filter(item => item.display_name.toLowerCase().includes(lower));
+}
+
 dInput.addEventListener('input', () => {
   const q = dInput.value.trim();
   dClear.style.display = q ? 'block' : 'none';
@@ -61,63 +132,73 @@ document.addEventListener('click', e => {
 });
 
 
-function renderSearchResults(data) {
-  dLoading.style.display='none';
-  // Dedup: same name within ~20km counts as duplicate
+function _dedupResults(data) {
   const unique = [];
   for (const item of data) {
     const name = item.display_name.split(',')[0].trim();
     const lat = parseFloat(item.lat), lon = parseFloat(item.lon);
     const isDup = unique.some(u => {
       if (u.display_name.split(',')[0].trim() !== name) return false;
-      const d = Math.hypot(parseFloat(u.lat) - lat, parseFloat(u.lon) - lon);
-      return d < 0.5; // ~50km
+      return Math.hypot(parseFloat(u.lat) - lat, parseFloat(u.lon) - lon) < 0.5;
     });
     if (!isDup) unique.push(item);
   }
-  if (!unique.length) { dResults.innerHTML='<div style="padding:9px 12px;font-size:.73rem;color:var(--muted)">No results found</div>'; return; }
-  // Detect duplicate names so we can add disambiguating detail
+  return unique;
+}
+
+function _renderResultItems(items, allItems) {
   const nameCounts = {};
-  unique.forEach(item => {
+  allItems.forEach(item => {
     const name = item.display_name.split(',')[0];
     nameCounts[name] = (nameCounts[name] || 0) + 1;
   });
-  dResults.innerHTML='';
-  unique.forEach(item=>{
+  items.forEach(item => {
     const main = item.display_name.split(',')[0];
-    // Build detail from address fields for cleaner results (e.g. "Slovenia" not "Upravna Enota Ljubljana")
-    let detail = '';
-    if (item.address) {
-      const a = item.address;
-      const parts = [a.state || a.county || a.municipality || '', a.country || ''].filter(p => p && p !== main);
-      detail = parts.join(', ');
-    }
-    if (!detail) detail = item.display_name.split(',').slice(1,3).join(', ').trim();
-    // For duplicate names, build a richer detail line with archipelago/region/country
+    // Build detail from display_name (most reliable — includes all address levels)
+    let detail = item.display_name.split(',').slice(1).map(s => s.trim()).filter(Boolean).join(', ');
+    // For duplicate names, enrich with archipelago/region if needed
     if (nameCounts[main] > 1 && item.address) {
-      const a = item.address;
-      const local = a.municipality || a.town || a.city || a.village || a.county || a.district || '';
-      const parts = [local];
-      if (item.address.archipelago) parts.push(item.address.archipelago);
-      if (item.address.state) parts.push(item.address.state);
-      if (item.address.country) parts.push(item.address.country);
-      // Append continent/region only when duplicates span different regions
-      const siblings = unique.filter(i => i.display_name.split(',')[0].trim() === main);
-      const regions = siblings.map(i => _regionFromCoords(i.lat, i.lon));
-      const multiRegion = new Set(regions.filter(Boolean)).size > 1;
-      if (multiRegion) {
-        const region = _regionFromCoords(item.lat, item.lon);
-        if (region) parts.push(region);
+      const parts = item.display_name.split(',').slice(1).map(s => s.trim()).filter(Boolean);
+      if (item.address.archipelago && !parts.includes(item.address.archipelago)) {
+        parts.splice(parts.length - 1, 0, item.address.archipelago);
       }
-      // Remove parts that repeat the main name
+      const siblings = allItems.filter(i => i.display_name.split(',')[0].trim() === main);
+      const regions = siblings.map(i => _regionFromCoords(i.lat, i.lon));
+      if (new Set(regions.filter(Boolean)).size > 1) {
+        const region = _regionFromCoords(item.lat, item.lon);
+        if (region && !parts.includes(region)) parts.push(region);
+      }
       detail = parts.filter(p => p && p !== main).join(', ');
     }
-    const el=document.createElement('div');
-    el.className='dest-item';
-    el.innerHTML=`<span class="dest-item-icon">📍</span><div><div class="dest-item-name">${esc(main)}</div><div class="dest-item-detail">${esc(detail)}</div></div>`;
-    el.addEventListener('click', ()=>flyTo(item));
+    const el = document.createElement('div');
+    el.className = 'dest-item';
+    el.innerHTML = `<span class="dest-item-icon">📍</span><div><div class="dest-item-name">${esc(main)}</div><div class="dest-item-detail">${esc(detail)}</div></div>`;
+    el.addEventListener('click', () => flyTo(item));
     dResults.appendChild(el);
   });
+}
+
+function renderSearchResults(data, globalData) {
+  dLoading.style.display = 'none';
+  const nearby = globalData !== undefined ? _dedupResults(data) : [];
+  const global = _dedupResults(globalData !== undefined ? globalData : data);
+  const allItems = [...nearby, ...global];
+
+  if (!allItems.length) {
+    dResults.innerHTML = '<div style="padding:9px 12px;font-size:.73rem;color:var(--muted)">No results found</div>';
+    return;
+  }
+  dResults.innerHTML = '';
+  if (nearby.length) {
+    _renderResultItems(nearby, allItems);
+    if (global.length) {
+      const divider = document.createElement('div');
+      divider.className = 'dest-divider';
+      divider.textContent = 'Other results';
+      dResults.appendChild(divider);
+    }
+  }
+  if (global.length) _renderResultItems(global, allItems);
 }
 
 // Reverse geocode GPS coordinates — returns a single result formatted
@@ -226,7 +307,7 @@ async function runDestSearch(q) {
     return;
   }
   dResults.style.display='block'; dLoading.style.display='block';
-  dResults.querySelectorAll('.dest-item').forEach(el=>el.remove());
+  dResults.querySelectorAll('.dest-item,.dest-divider').forEach(el=>el.remove());
 
   // Detect GPS coordinate input (e.g. "48.8566, 2.3522" or "48.8566° N, 2.3522° E")
   const coordMatch = q.trim().match(/^(-?\d+\.?\d*)[°\s]*[NSns]?\s*,\s*(-?\d+\.?\d*)[°\s]*[EWew]?$/);
@@ -242,45 +323,83 @@ async function runDestSearch(q) {
   }
 
   const zoom = map ? map.getZoom() : 0;
-  const cacheKey = q + (zoom >= 3 ? `@${map.getCenter().lng.toFixed(1)},${map.getCenter().lat.toFixed(1)}` : '') + (_searchCategory !== 'all' ? `#${_searchCategory}` : '');
-  if (_searchCache[cacheKey]) { renderSearchResults(_searchCache[cacheKey]); return; }
+  // Category searches are viewport-dependent (Overpass bbox); general searches are not
+  const cacheKey = _searchCategory !== 'all'
+    ? q + (zoom >= 3 ? `@${map.getCenter().lng.toFixed(1)},${map.getCenter().lat.toFixed(1)}` : '') + `#${_searchCategory}`
+    : q;
 
   if (_searchCategory !== 'all') {
+    if (_searchCache[cacheKey]) { renderSearchResults(_searchCache[cacheKey]); return; }
     await runCategorySearch(q, _searchCategory, cacheKey);
     return;
   }
-  try {
-    await nominatimThrottle();
-    // Pass viewbox to bias results toward visible region
-    let viewbox = '';
-    if (map && zoom >= 3) {
-      const b = map.getBounds();
-      viewbox = `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=0`;
+
+  // Filter prefetched POI cache for instant nearby results
+  const nearby = _filterPOICache(q);
+
+  // Check Nominatim cache
+  let nominatimData = _searchCache[cacheKey];
+  if (!nominatimData) {
+    try {
+      await nominatimThrottle();
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=10&addressdetails=1`,{headers:{'Accept-Language':'en'}});
+      if (!r.ok) { throw new Error(`HTTP ${r.status}`); }
+      nominatimData = await r.json();
+      _searchCache[cacheKey] = nominatimData;
+    } catch(err) {
+      console.warn('Search failed:', err);
+      if (!nearby.length) {
+        dLoading.style.display='none';
+        dResults.innerHTML=`<div style="padding:9px 12px;font-size:.73rem;color:var(--accent2)">Search failed — try again in a moment</div>`;
+        return;
+      }
+      nominatimData = [];
     }
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=10&addressdetails=1${viewbox}`,{headers:{'Accept-Language':'en'}});
-    if (!r.ok) { throw new Error(`HTTP ${r.status}`); }
-    let data = await r.json();
-    // Re-sort: results within the visible bounds come first, then by distance from center
-    if (map && zoom >= 3) {
-      const b = map.getBounds();
-      const c = map.getCenter();
-      const inBounds = (d) => {
-        const lat = parseFloat(d.lat), lon = parseFloat(d.lon);
-        return lat >= b.getSouth() && lat <= b.getNorth() && lon >= b.getWest() && lon <= b.getEast();
-      };
-      const dist = (d) => Math.hypot(parseFloat(d.lat) - c.lat, parseFloat(d.lon) - c.lng);
-      data.sort((a, b2) => {
-        const aIn = inBounds(a), bIn = inBounds(b2);
-        if (aIn !== bIn) return aIn ? -1 : 1;
-        return dist(a) - dist(b2);
-      });
+  }
+
+  // Split Nominatim results by viewport bounds — in-bounds results join
+  // the nearby group, out-of-bounds go below the "Other results" divider
+  let inBoundsNom = [], outBoundsNom = [];
+  if (map && zoom >= 3) {
+    const b = map.getBounds();
+    for (const d of nominatimData) {
+      const lat = parseFloat(d.lat), lon = parseFloat(d.lon);
+      if (lat >= b.getSouth() && lat <= b.getNorth() && lon >= b.getWest() && lon <= b.getEast()) {
+        inBoundsNom.push(d);
+      } else {
+        outBoundsNom.push(d);
+      }
     }
-    _searchCache[cacheKey] = data;
-    renderSearchResults(data);
-  } catch(err) {
-    console.warn('Search failed:', err);
-    dLoading.style.display='none';
-    dResults.innerHTML=`<div style="padding:9px 12px;font-size:.73rem;color:var(--accent2)">Search failed — try again in a moment</div>`;
+  } else {
+    inBoundsNom = nominatimData;
+  }
+
+  // Merge POI cache + in-bounds Nominatim, dedup by name + proximity
+  const allNearby = [...nearby];
+  for (const nd of inBoundsNom) {
+    const nName = nd.display_name.split(',')[0].trim().toLowerCase();
+    const isDup = allNearby.some(nb => {
+      const nbName = nb.display_name.split(',')[0].trim().toLowerCase();
+      return nbName === nName && Math.hypot(parseFloat(nb.lat) - parseFloat(nd.lat), parseFloat(nb.lon) - parseFloat(nd.lon)) < 0.15;
+    });
+    if (!isDup) allNearby.push(nd);
+  }
+
+  // Dedup out-of-bounds against nearby
+  const globalData = outBoundsNom.filter(nd => {
+    const nName = nd.display_name.split(',')[0].trim().toLowerCase();
+    return !allNearby.some(nb => {
+      const nbName = nb.display_name.split(',')[0].trim().toLowerCase();
+      return nbName === nName && Math.hypot(parseFloat(nb.lat) - parseFloat(nd.lat), parseFloat(nb.lon) - parseFloat(nd.lon)) < 0.15;
+    });
+  });
+
+  if (allNearby.length && globalData.length) {
+    renderSearchResults(allNearby, globalData);
+  } else if (allNearby.length) {
+    renderSearchResults(allNearby);
+  } else {
+    renderSearchResults(globalData);
   }
 }
 
