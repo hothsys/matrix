@@ -65,7 +65,7 @@ jobs:
                   messages: [
                     {
                       role: 'system',
-                      content: 'You are a senior software engineer reviewing a pull request. Write a concise summary (2-4 sentences) describing the functional changes in this PR. For each major change, explain WHAT was changed and WHY. Focus on application behavior, not CI/workflow/tooling changes. Do not use markdown headers or bullet points. Write in third person (e.g., "This PR fixes..." not "I fixed..."). Be specific — name the features, functions, or components affected. Never end with generic filler about "enhancing the user experience," "improving usability," or "overall" wrap-up sentences. Stop after stating the facts.'
+                      content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. After stating the facts, stop.'
                     },
                     {
                       role: 'user',
