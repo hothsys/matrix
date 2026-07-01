@@ -76,10 +76,10 @@ input,textarea,select{font-family:var(--font)}
 .year-hdr.collapsed .year-hdr-arrow{transform:rotate(-90deg)}
 .year-hdr-label{font-size:.95rem;font-weight:600;color:var(--text)}
 .year-hdr-count{font-size:.62rem;color:var(--muted);margin-left:8px}
-.year-hdr-line{flex:1;height:1px;background:var(--border);margin-left:8px}.year-body{padding-left:2px}
+.year-hdr-line{flex:1;height:1px;background:var(--border);margin-left:8px}.year-body{padding-left:2px;overflow:hidden;transition:max-height .5s ease}
 .year-body>.year-group>.year-hdr{padding-left:26px}
 .year-body>.year-group>.year-body{padding-left:20px}
-.year-hdr.collapsed+.year-body{display:none}
+.year-hdr.collapsed+.year-body{max-height:0}
 .collapse-all-btn{background:none;border:none;color:var(--muted);font-size:.7rem;cursor:pointer;padding:2px 6px;border-radius:4px;transition:transform .15s,background .15s;line-height:1}
 .collapse-all-btn:hover{background:var(--surface2)}
 .collapse-all-btn.all-collapsed{transform:rotate(-90deg)}
