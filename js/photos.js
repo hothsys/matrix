@@ -6,6 +6,25 @@ function photoSortKey(p) {
   return '9999-99-99T' + String(p.addedAt).padStart(16,'0');
 }
 
+function _animateBody(hdr, body, expand) {
+  const prev = body._animEnd;
+  if (prev) { body.removeEventListener('transitionend', prev); body._animEnd = null; }
+  if (expand) {
+    body.style.maxHeight = '';
+    const h = body.scrollHeight;
+    body.style.maxHeight = '0';
+    void body.scrollHeight;
+    body.style.maxHeight = h + 'px';
+    hdr.classList.remove('collapsed');
+    const onEnd = () => { body.style.maxHeight = ''; body.removeEventListener('transitionend', onEnd); body._animEnd = null; };
+    body._animEnd = onEnd;
+    body.addEventListener('transitionend', onEnd);
+  } else {
+    body.style.maxHeight = body.scrollHeight + 'px';
+    requestAnimationFrame(() => { hdr.classList.add('collapsed'); body.style.maxHeight = ''; });
+  }
+}
+
 // Track expanded groups across rebuilds
 const _expandedDecades = new Set(); // decade-level collapse (Photos tab)
 const _expandedYears = new Set();   // year-level collapse (Photos tab)
@@ -29,15 +48,16 @@ function toggleAllYears(tab) {
     const allExpanded = _decadeEntries.length > 0 && _decadeEntries.every(e => _expandedDecades.has(e.yr));
     _decadeEntries.forEach(e => {
       const hdr = e.group.querySelector(':scope > .year-hdr');
+      const body = hdr?.nextElementSibling;
       if (allExpanded) {
         _expandedDecades.delete(e.yr);
-        if (hdr) hdr.classList.add('collapsed');
+        if (hdr && body && !hdr.classList.contains('collapsed')) _animateBody(hdr, body, false);
       } else {
         _expandedDecades.add(e.yr);
-        if (hdr) hdr.classList.remove('collapsed');
-        // Also expand all years inside this decade
+        if (hdr && body && hdr.classList.contains('collapsed')) _animateBody(hdr, body, true);
         e.group.querySelectorAll('.year-group > .year-hdr.collapsed').forEach(yh => {
-          yh.classList.remove('collapsed');
+          const yb = yh.nextElementSibling;
+          if (yb) _animateBody(yh, yb, true);
           _expandedYears.add(yh.querySelector('.year-hdr-label').textContent);
         });
       }
@@ -49,12 +69,13 @@ function toggleAllYears(tab) {
     const allExpanded = hdrs.length > 0 && [...hdrs].every(h => !h.classList.contains('collapsed'));
     hdrs.forEach(h => {
       const yr = h.querySelector('.year-hdr-label').textContent;
+      const body = h.nextElementSibling;
       if (allExpanded) {
-        h.classList.add('collapsed');
         _tlCollapsedYears.add(yr);
+        if (body && !h.classList.contains('collapsed')) _animateBody(h, body, false);
       } else {
-        h.classList.remove('collapsed');
         _tlCollapsedYears.delete(yr);
+        if (body && h.classList.contains('collapsed')) _animateBody(h, body, true);
       }
     });
     const btn = document.getElementById('tl-collapse-all');
@@ -135,9 +156,10 @@ function rebuildPhotoList() {
       yearGroup.appendChild(yearBody);
 
       yearHdr.addEventListener('click', () => {
-        yearHdr.classList.toggle('collapsed');
-        if (yearHdr.classList.contains('collapsed')) _expandedYears.delete(yr);
-        else _expandedYears.add(yr);
+        const expanding = yearHdr.classList.contains('collapsed');
+        if (expanding) _expandedYears.add(yr);
+        else _expandedYears.delete(yr);
+        _animateBody(yearHdr, yearBody, expanding);
       });
 
       decadeBody.appendChild(yearGroup);
@@ -148,9 +170,10 @@ function rebuildPhotoList() {
     frag.appendChild(decadeGroup);
 
     decadeHdr.addEventListener('click', () => {
-      decadeHdr.classList.toggle('collapsed');
-      if (decadeHdr.classList.contains('collapsed')) _expandedDecades.delete(dk);
-      else _expandedDecades.add(dk);
+      const expanding = decadeHdr.classList.contains('collapsed');
+      if (expanding) _expandedDecades.add(dk);
+      else _expandedDecades.delete(dk);
+      _animateBody(decadeHdr, decadeBody, expanding);
       _syncCollapseBtn('photos');
     });
 
@@ -211,14 +234,15 @@ function highlightCard(id) {
     for (const ye of de.years) {
       const card = ye.body.querySelector(`#card_${id}`);
       if (card) {
-        if (!_expandedDecades.has(de.yr)) {
+        const dhdr = de.group.querySelector(':scope > .year-hdr');
+        const dBody = dhdr?.nextElementSibling;
+        if (dhdr && dBody && !_expandedDecades.has(de.yr)) {
           _expandedDecades.add(de.yr);
-          const dhdr = de.group.querySelector(':scope > .year-hdr');
-          if (dhdr) dhdr.classList.remove('collapsed');
+          _animateBody(dhdr, dBody, true);
         }
         if (!_expandedYears.has(ye.yr)) {
           _expandedYears.add(ye.yr);
-          ye.hdr.classList.remove('collapsed');
+          _animateBody(ye.hdr, ye.body, true);
         }
         _syncCollapseBtn('photos');
         break outer;
@@ -303,9 +327,10 @@ function buildTimeline() {
     group.appendChild(body);
 
     hdr.addEventListener('click', () => {
-      hdr.classList.toggle('collapsed');
-      if (hdr.classList.contains('collapsed')) _tlCollapsedYears.add(yr);
-      else _tlCollapsedYears.delete(yr);
+      const expanding = hdr.classList.contains('collapsed');
+      if (expanding) _tlCollapsedYears.delete(yr);
+      else _tlCollapsedYears.add(yr);
+      _animateBody(hdr, body, expanding);
       _syncCollapseBtn('timeline');
     });
 

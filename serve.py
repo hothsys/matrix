@@ -709,27 +709,39 @@ def _run_tests(port):
     except Exception:
         pass
 
-    # Start server in background
-    server = ThreadingHTTPServer(("127.0.0.1", port), MatrixHandler)
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-    print(f"  Test server running on http://localhost:{port}")
+    try:
+        # Check port availability before starting
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('127.0.0.1', port)) == 0:
+                print(f"  ERROR: Port {port} is already in use.")
+                print(f"  Stop your other server first, then re-run tests.")
+                sys.exit(1)
 
-    tests_dir = os.path.join(APP_DIR, 'tests')
+        # Start server in background
+        server = ThreadingHTTPServer(("127.0.0.1", port), MatrixHandler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        print(f"  Test server running on http://localhost:{port}")
 
-    # Install dependencies if needed
-    if not os.path.exists(os.path.join(tests_dir, 'node_modules')):
-        print("  Installing Playwright...")
-        subprocess.run(['npm', 'install'], cwd=tests_dir, check=True)
-        subprocess.run(['npx', 'playwright', 'install', 'chromium'], cwd=tests_dir, check=True)
+        tests_dir = os.path.join(APP_DIR, 'tests')
 
-    # Run tests
-    print()
-    result = subprocess.run(['npx', 'playwright', 'test'], cwd=tests_dir)
+        # Install dependencies if needed
+        if not os.path.exists(os.path.join(tests_dir, 'node_modules')):
+            print("  Installing Playwright...")
+            subprocess.run(['npm', 'install'], cwd=tests_dir, check=True)
+            subprocess.run(['npx', 'playwright', 'install', 'chromium'], cwd=tests_dir, check=True)
 
-    # Cleanup
-    server.shutdown()
-    shutil.rmtree(test_dir, ignore_errors=True)
+        # Run tests
+        print()
+        result = subprocess.run(['npx', 'playwright', 'test'], cwd=tests_dir)
+
+    finally:
+        try:
+            server.shutdown()
+        except Exception:
+            pass
+        shutil.rmtree(test_dir, ignore_errors=True)
+
     sys.exit(result.returncode)
 
 
