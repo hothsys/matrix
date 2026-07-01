@@ -57,7 +57,7 @@
 | 🗓 Timeline | Chronological photo browser |
 | 🖼 Lightbox | Full-size viewer with navigation and camera info |
 | 📝 Notes | Add notes to any pin |
-| 🛰 Map styles | Light, Bright, Dark, Terrain, 3D Terrain, Satellite, 3D Satellite, Globe |
+| 🛰 Map styles | Light, Dark, Terrain, 3D Terrain, Satellite, 3D Satellite, Globe |
 | 🔄 Clustering | Pins cluster by zoom, expand on click |
 | 💾 Auto-save | Background backup to disk via `serve.py` |
 | 📦 Export / Import | Full dataset as compressed `.json.gz` |

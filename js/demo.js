@@ -15,7 +15,6 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
   switch (e.key) {
     case 'l': case 'L': setMapStyle('light'); break;
-    case 'b': case 'B': setMapStyle('bright'); break;
     case 'd': case 'D': setMapStyle('dark'); break;
     case 't': case 'T': setMapStyle('enriched'); break;
     case '3': setMapStyle('terrain3d'); break;
