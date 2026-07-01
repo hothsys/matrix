@@ -7,7 +7,6 @@ Shortcuts are disabled when typing in any input field.
 | Key | Action |
 |---|---|
 | `L` | Switch to Light Map |
-| `B` | Switch to Bright Map |
 | `D` | Switch to Dark Map |
 | `T` | Switch to Terrain |
 | `3` | Switch to 3D Terrain |

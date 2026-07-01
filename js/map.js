@@ -4,11 +4,9 @@
 function _styleUrl() {
   if (_mapStyle === 'satellite' || _mapStyle === 'satellite3d') return STYLE_SAT;
   if (_mapStyle === 'dark') return STYLE_DARK;
-  if (_mapStyle === 'bright') return STYLE_BRIGHT;
   return STYLE_STREET; // light, enriched, terrain3d, globe all use Liberty as base
 }
 const STYLE_STREET = 'https://tiles.openfreemap.org/styles/liberty';
-const STYLE_BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
 const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const STYLE_SAT = {
   version:8,
@@ -441,7 +439,7 @@ function addPinLayers() {
 // ═══════════════════════════════════════
 function initTheme() {
   const stored = localStorage.getItem('matrix-theme');
-  if (stored && ['dark', 'light', 'bright', 'enriched', 'terrain3d', 'globe'].includes(stored)) {
+  if (stored && ['dark', 'light', 'enriched', 'terrain3d', 'globe'].includes(stored)) {
     _mapStyle = stored;
   } else {
     _mapStyle = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -460,7 +458,7 @@ function applyTheme() {
   document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
   _tileTemplatesCache = null;
   const btn = document.getElementById('tb-style-btn');
-  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + ' ▾';
   document.querySelectorAll('.style-menu-item').forEach(el => el.classList.toggle('active', el.dataset.style === _mapStyle));
   _syncExportBtnState();
@@ -900,7 +898,7 @@ function setMapStyle(mode) {
   _syncExportBtnState();
 
   // Update button label
-  const labels = { light: 'Light Map', bright: 'Bright Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
+  const labels = { light: 'Light Map', enriched: 'Terrain', dark: 'Dark Map', satellite: 'Satellite', satellite3d: '3D Satellite', terrain3d: '3D Terrain', globe: 'Globe' };
   const btn = document.getElementById('tb-style-btn');
   if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
 
