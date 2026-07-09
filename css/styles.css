@@ -72,19 +72,21 @@ input,textarea,select{font-family:var(--font)}
 #panel-photos{overflow-y:auto;padding:2px 14px 12px;flex:1}
 .section-label{font-size:.63rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:8px 0 6px}
 .year-group{margin-bottom:4px}
-.year-hdr{display:flex;align-items:center;padding:10px 8px;cursor:pointer;user-select:none}
-.year-hdr:hover{background:var(--surface2);border-radius:8px}
-.year-hdr-arrow{font-size:.7rem;color:var(--muted);transition:transform .15s;width:16px;text-align:center;margin-right:8px}
-.year-hdr.collapsed .year-hdr-arrow{transform:rotate(-90deg)}
-.year-hdr-label{font-size:.95rem;font-weight:600;color:var(--text)}
-.year-hdr-count{font-size:.62rem;color:var(--muted);margin-left:8px}
-.year-hdr-line{flex:1;height:1px;background:var(--border);margin-left:8px}.year-body{padding-left:2px;overflow:hidden;transition:max-height .5s ease}
+.year-hdr{display:flex;align-items:center;padding:10px 8px;cursor:pointer;user-select:none;border-radius:8px;transition:background .15s}
+.year-hdr:hover{background:var(--surface2)}
+.year-hdr-label{font-size:.95rem;font-weight:600;color:var(--text);transition:color .15s}
+.year-hdr.collapsed .year-hdr-label{color:var(--muted)}
+.year-hdr-count{font-size:.6rem;color:var(--muted);margin-left:9px;background:var(--surface2);padding:2px 8px;border-radius:10px;transition:background .15s,color .15s}
+.year-hdr.collapsed .year-hdr-count{background:transparent;border:1px solid var(--border)}
+.year-hdr:hover .year-hdr-count{background:var(--accent-dim);color:var(--text)}
+.year-hdr-line{flex:1;height:1px;background:var(--border);margin-left:8px}.year-body{padding-left:2px;overflow:hidden;transition:max-height .3s ease}
 .year-body>.year-group>.year-hdr{padding-left:26px}
 .year-body>.year-group>.year-body{padding-left:20px}
 .year-hdr.collapsed+.year-body{max-height:0}
-.collapse-all-btn{background:none;border:none;color:var(--muted);font-size:.7rem;cursor:pointer;padding:2px 6px;border-radius:4px;transition:transform .15s,background .15s;line-height:1}
-.collapse-all-btn:hover{background:var(--surface2)}
-.collapse-all-btn.all-collapsed{transform:rotate(-90deg)}
+.collapse-all-btn{background:none;border:none;color:var(--muted);font-size:.62rem;cursor:pointer;padding:3px 7px;border-radius:5px;transition:background .15s,color .15s;line-height:1;font-family:var(--font);letter-spacing:.02em}
+.collapse-all-btn:hover{background:var(--surface2);color:var(--text)}
+.collapse-all-btn::after{content:'Collapse all'}
+.collapse-all-btn.all-collapsed::after{content:'Expand all'}
 .photo-card{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:10px;cursor:pointer;transition:background .15s;margin-bottom:3px;box-sizing:border-box}
 .photo-card:hover{background:var(--surface2)}
 .photo-card.active{background:var(--accent-dim);outline:1px solid rgba(91,142,240,.3)}
