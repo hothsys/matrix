@@ -46,7 +46,8 @@ function updateCountriesBar() {
   const codes = Object.keys(earliest);
   if (!codes.length) { bar.style.display = 'none'; flagsEl.innerHTML = ''; return; }
   const sorted = codes.sort((a, b) => earliest[a] < earliest[b] ? -1 : earliest[a] > earliest[b] ? 1 : 0);
-  flagsEl.innerHTML = sorted.map(c => `<span data-name="${esc(countryName(c))}">${countryFlag(c)}</span>`).join(' ');
+  const hasPhotos = new Set(photos.filter(p => p.countryCode && p.lat !== null && !p.isEmptyPin).map(p => p.countryCode));
+  flagsEl.innerHTML = sorted.map(c => `<span data-name="${esc(countryName(c))}" data-cc="${c}"${hasPhotos.has(c) ? ' data-has-photos' : ''}>${countryFlag(c)}</span>`).join(' ');
   bar.style.display = 'block';
   const labelEl = document.querySelector('#countries-bar .cb-label');
   labelEl.textContent = sorted.length === 1 ? '1 Country Visited' : `${sorted.length} Countries Visited`;
@@ -91,7 +92,60 @@ function toggleCountriesBar() {
     if (span) { statusEl.textContent = span.dataset.name; statusEl.style.opacity = '1'; }
   });
   flagsEl.addEventListener('mouseleave', () => { statusEl.textContent = '\u00a0'; statusEl.style.opacity = '.5'; });
+  flagsEl.addEventListener('click', e => {
+    const span = e.target.closest('span[data-cc]');
+    if (span) toggleCountryStrip(span.dataset.cc);
+  });
 })();
+
+// ═══════════════════════════════════════
+// COUNTRY FILM STRIP
+// ═══════════════════════════════════════
+let _stripCountry = null;
+
+function toggleCountryStrip(cc) {
+  if (_stripCountry === cc) { closeCountryStrip(); return; }
+  openCountryStrip(cc);
+}
+
+function openCountryStrip(cc) {
+  const strip = document.getElementById('country-strip');
+  const photosEl = document.getElementById('country-strip-photos');
+  const labelEl = document.getElementById('country-strip-label');
+
+  const countryPhotos = photos
+    .filter(p => p.countryCode === cc && p.lat !== null && !p.isEmptyPin)
+    .sort((a, b) => photoSortKey(a) < photoSortKey(b) ? -1 : 1);
+
+  if (!countryPhotos.length) return;
+
+  _stripCountry = cc;
+  labelEl.innerHTML = `<span class="strip-flag">${countryFlag(cc)}</span>${esc(countryName(cc))}`;
+  photosEl.innerHTML = '';
+
+  const ids = countryPhotos.map(p => p.id);
+  countryPhotos.forEach((p, i) => {
+    const img = document.createElement('img');
+    img.className = 'strip-thumb';
+    img.src = p.thumbUrl;
+    img.alt = p.placeName || p.name || '';
+    img.loading = 'lazy';
+    img.addEventListener('click', () => {
+      lbIds = ids;
+      lbIdx = i;
+      showLbPhoto();
+      document.getElementById('lightbox').classList.add('open');
+    });
+    photosEl.appendChild(img);
+  });
+
+  strip.classList.add('open');
+}
+
+function closeCountryStrip() {
+  _stripCountry = null;
+  document.getElementById('country-strip').classList.remove('open');
+}
 
 // ═══════════════════════════════════════
 // DND + UPLOAD

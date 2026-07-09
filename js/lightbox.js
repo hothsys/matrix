@@ -89,5 +89,8 @@ document.addEventListener('keydown',e=>{
   if(lb&&e.key==='Escape')closeLightbox();
   if(lb&&e.key==='ArrowLeft')lbNav(-1);
   if(lb&&e.key==='ArrowRight')lbNav(1);
-  if(!lb&&e.key==='Escape'){closeMetaModal();clearDestSearch();}
+  if(!lb&&e.key==='Escape'){
+    if(document.getElementById('country-strip').classList.contains('open')){closeCountryStrip();}
+    else{closeMetaModal();clearDestSearch();}
+  }
 });
