@@ -6,22 +6,53 @@ function photoSortKey(p) {
   return '9999-99-99T' + String(p.addedAt).padStart(16,'0');
 }
 
+// Duration scales with content height so small groups snap and large ones
+// don't feel sluggish. Clamped to 180–420ms.
+function _animDuration(h) {
+  return Math.max(180, Math.min(420, 120 + h * 0.25));
+}
+
 function _animateBody(hdr, body, expand) {
   const prev = body._animEnd;
   if (prev) { body.removeEventListener('transitionend', prev); body._animEnd = null; }
+
+  // Respect the user's reduced-motion preference — toggle instantly.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    hdr.classList.toggle('collapsed', !expand);
+    body.style.maxHeight = '';
+    return;
+  }
+
   if (expand) {
     body.style.maxHeight = '';
     const h = body.scrollHeight;
+    body.style.transitionDuration = _animDuration(h) + 'ms';
     body.style.maxHeight = '0';
     void body.scrollHeight;
     body.style.maxHeight = h + 'px';
     hdr.classList.remove('collapsed');
-    const onEnd = () => { body.style.maxHeight = ''; body.removeEventListener('transitionend', onEnd); body._animEnd = null; };
+    // Clear inline overrides on completion so nested groups can grow later.
+    const onEnd = () => {
+      body.style.maxHeight = '';
+      body.style.transitionDuration = '';
+      body.removeEventListener('transitionend', onEnd);
+      body._animEnd = null;
+    };
     body._animEnd = onEnd;
     body.addEventListener('transitionend', onEnd);
   } else {
-    body.style.maxHeight = body.scrollHeight + 'px';
-    requestAnimationFrame(() => { hdr.classList.add('collapsed'); body.style.maxHeight = ''; });
+    const h = body.scrollHeight;
+    body.style.transitionDuration = _animDuration(h) + 'ms';
+    body.style.maxHeight = h + 'px';
+    void body.scrollHeight;
+    requestAnimationFrame(() => { hdr.classList.add('collapsed'); body.style.maxHeight = '0'; });
+    const onEnd = () => {
+      body.style.transitionDuration = '';
+      body.removeEventListener('transitionend', onEnd);
+      body._animEnd = null;
+    };
+    body._animEnd = onEnd;
+    body.addEventListener('transitionend', onEnd);
   }
 }
 
@@ -133,7 +164,7 @@ function rebuildPhotoList() {
 
     const decadeHdr = document.createElement('div');
     decadeHdr.className = _expandedDecades.has(dk) ? 'year-hdr' : 'year-hdr collapsed';
-    decadeHdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${decadeLabel}</span><span class="year-hdr-count">${totalCount}</span><span class="year-hdr-line"></span>`;
+    decadeHdr.innerHTML = `<span class="year-hdr-label">${decadeLabel}</span><span class="year-hdr-count">${totalCount}</span><span class="year-hdr-line"></span>`;
     decadeGroup.appendChild(decadeHdr);
 
     const decadeBody = document.createElement('div');
@@ -147,7 +178,7 @@ function rebuildPhotoList() {
 
       const yearHdr = document.createElement('div');
       yearHdr.className = _expandedYears.has(yr) ? 'year-hdr' : 'year-hdr collapsed';
-      yearHdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${byDecade[dk][yr].length}</span><span class="year-hdr-line"></span>`;
+      yearHdr.innerHTML = `<span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${byDecade[dk][yr].length}</span><span class="year-hdr-line"></span>`;
       yearGroup.appendChild(yearHdr);
 
       const yearBody = document.createElement('div');
@@ -296,7 +327,7 @@ function buildTimeline() {
   const frag = document.createDocumentFragment();
   const tlHdr = document.createElement('div');
   tlHdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between';
-  tlHdr.innerHTML = `<div class="section-label">Timeline</div><button class="collapse-all-btn" id="tl-collapse-all" onclick="toggleAllYears('timeline')" title="Collapse/Expand all">▼</button>`;
+  tlHdr.innerHTML = `<div class="section-label">Timeline</div><button class="collapse-all-btn" id="tl-collapse-all" onclick="toggleAllYears('timeline')"></button>`;
   frag.appendChild(tlHdr);
   Object.keys(byYear).sort().forEach(yr=>{
     const group = document.createElement('div');
@@ -304,7 +335,7 @@ function buildTimeline() {
     const collapsed = _tlCollapsedYears.has(yr);
     const hdr = document.createElement('div');
     hdr.className = collapsed ? 'year-hdr collapsed' : 'year-hdr';
-    hdr.innerHTML = `<span class="year-hdr-arrow">▼</span><span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${yearCounts[yr]}</span><span class="year-hdr-line"></span>`;
+    hdr.innerHTML = `<span class="year-hdr-label">${yr}</span><span class="year-hdr-count">${yearCounts[yr]}</span><span class="year-hdr-line"></span>`;
     group.appendChild(hdr);
 
     const body = document.createElement('div');
