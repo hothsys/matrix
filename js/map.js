@@ -11,7 +11,7 @@ const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const STYLE_SAT = {
   version:8,
   sources:{sat:{type:'raster',tiles:['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg'],tileSize:256,maxzoom:18}},
-  layers:[{id:'sat',type:'raster',source:'sat',paint:{'raster-fade-duration':0}}]
+  layers:[{id:'sat',type:'raster',source:'sat',paint:{'raster-fade-duration':0,'raster-saturation':0.15,'raster-contrast':0.08,'raster-brightness-max':0.95}}]
 };
 function normalizeDarkLabels() {
   // Dark style uses uppercase + regular weight on all place labels.
@@ -106,13 +106,32 @@ function _patchStyleWater(styleObj) {
   // Apple Maps Dark palette — neutral dark land, distinctly blue water.
   // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
   if (_mapStyle === 'dark') {
-    // Darker water for Dark Map
     const waterColor = '#17212b';
     for (const layer of styleObj.layers) {
       if (!layer.paint) layer.paint = {};
       if (layer.type === 'fill' && /^water/.test(layer.id)) {
         layer.paint['fill-color'] = waterColor;
       }
+    }
+    // Coastline glow — subtle blue edge where water meets land
+    const waterIdx = styleObj.layers.findIndex(l => l.id === 'water');
+    if (waterIdx !== -1) {
+      styleObj.layers.splice(waterIdx + 1, 0, {
+        id: 'water-glow',
+        type: 'line',
+        source: 'openmaptiles',
+        'source-layer': 'water',
+        filter: ['all',
+          ['match', ['geometry-type'], ['MultiPolygon', 'Polygon'], true, false],
+          ['!=', ['get', 'brunnel'], 'tunnel']
+        ],
+        paint: {
+          'line-color': '#1a3a5c',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 0, 2, 6, 3.5, 12, 5],
+          'line-blur': ['interpolate', ['linear'], ['zoom'], 0, 3, 6, 6, 12, 10],
+          'line-opacity': 0.8
+        }
+      });
     }
   }
   const color = _mapStyle === 'dark' ? '#6a9fd8' : '#2c5f8a';
