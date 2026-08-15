@@ -1,36 +1,30 @@
 name: PR Summary
-
 on:
   pull_request_target:
     types: [opened, synchronize]
-
 jobs:
   summary:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-      models: read
     steps:
       - name: Generate PR Summary
         uses: actions/github-script@v9
         env:
-          MODELS_TOKEN: ${{ secrets.MODELS_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
             });
-
             const { data: commits } = await github.rest.pulls.listCommits({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
             });
-
             const { data: files } = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -45,37 +39,31 @@ jobs:
               return `--- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})\n${patch}`;
             });
             const diffContext = diffParts.join('\n\n');
-
             const commitList = commits
               .map(c => c.commit.message.split('\n')[0].trim())
               .filter(m => m && !m.startsWith('Merge'))
               .join('\n');
 
-            // Call GitHub Models API to generate a natural-language summary
+            // Call OpenRouter API to generate a natural-language summary
             let aiSummary = '';
             try {
-              const aiResp = await fetch('https://models.github.ai/inference/chat/completions', {
+              const aiResp = await fetch('https://openrouter.ai', {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${process.env.MODELS_TOKEN}`,
+                  'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  model: 'openai/gpt-4o-mini',
+                  model: 'meta-llama/llama-3.3-70b-instruct:free',
                   messages: [
-                    {
-                      role: 'system',
-                      content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. After stating the facts, stop.'
-                    },
-                    {
-                      role: 'user',
-                      content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}`
-                    }
+                    { role: 'system', content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. After stating the facts, stop.' },
+                    { role: 'user', content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}` }
                   ],
                   temperature: 0.3,
                   max_tokens: 300,
                 })
               });
+
               if (aiResp.ok) {
                 const aiData = await aiResp.json();
                 aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
