@@ -101,4 +101,4 @@ The LaunchAgent (`~/Library/LaunchAgents/com.matrix.travel.plist`) runs headless
 
 ---
 
-Built with [Claude Code](https://claude.ai/claude-code) using Claude Opus 4.6
+Built with [Claude Code](https://claude.ai/claude-code)
