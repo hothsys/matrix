@@ -91,10 +91,8 @@ jobs:
 
               if (aiResp.ok) {
                 const aiData = await aiResp.json();
-                // Parse out the strict JSON structure
-                const rawContent = aiData.choices?.[0]?.message?.content?.trim() || '{}';
-                const parsedJson = JSON.parse(rawContent);
-                aiSummary = parsedJson.summary || '';
+                // FIXED: Cleaned up the broken syntax chain
+                aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
                 console.log('AI summary generated successfully.');
               } else {
                 const errBody = await aiResp.text();
