@@ -19,13 +19,19 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           script: |
-            const prNumber = context.payload.pull_request 
-              ? context.payload.pull_request.number 
-              : parseInt(github.context.payload.inputs.pr_number);
-              
-            if (!prNumber) {
-              throw new Error("No Pull Request number found or provided!");
+            // Safely parse PR number whether triggered by webhook or manually
+            let prNumber;
+            if (context.payload.pull_request) {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.payload.inputs && context.payload.inputs.pr_number) {
+              prNumber = parseInt(context.payload.inputs.pr_number, 10);
             }
+
+            if (!prNumber || isNaN(prNumber)) {
+              throw new Error("Could not determine a valid Pull Request number!");
+            }
+
+            console.log(`Processing summary for PR #${prNumber}`);
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
