@@ -64,7 +64,7 @@ jobs:
             // Call OpenRouter API to generate a natural-language summary
             let aiSummary = '';
             try {
-              const aiResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              const aiResp = await fetch('https://openrouter.ai', {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -73,20 +73,28 @@ jobs:
                   'X-Title': 'GitHub PR Summarizer'
                 },
                 body: JSON.stringify({
-                  model: 'openrouter/free',
+                  // Force a high-quality free model that respects system prompts
+                  model: 'google/gemini-2.5-flash:free',
+                  // Enforce strict JSON output so the model cannot write fluff/preamble
+                  response_format: { type: 'json_object' },
                   messages: [
-                    { role: 'system', content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. After stating the facts, stop.' },
+                    { 
+                      role: 'system', 
+                      content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. Output your response EXCLUSIVELY as a JSON object with a single key named "summary". Example: {"summary": "Your text here"}. Do not include any thinking or extra keys.' 
+                    },
                     { role: 'user', content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}` }
                   ],
-                  temperature: 0.3,
+                  temperature: 0.2,
                   max_tokens: 300,
                 })
               });
 
               if (aiResp.ok) {
                 const aiData = await aiResp.json();
-                // FIXED TYPO HERE: Corrected the parsing chain syntax
-                aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
+                // Parse out the strict JSON structure
+                const rawContent = aiData.choices?.[0]?.message?.content?.trim() || '{}';
+                const parsedJson = JSON.parse(rawContent);
+                aiSummary = parsedJson.summary || '';
                 console.log('AI summary generated successfully.');
               } else {
                 const errBody = await aiResp.text();
