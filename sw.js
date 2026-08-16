@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v20';
+const CACHE_VERSION = 'matrix-v21';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -35,8 +35,9 @@ const TILE_PATTERNS = [
   /glyphs?\//,        // map font glyphs
 ];
 
-// Max cached tiles (LRU eviction when exceeded)
-const MAX_TILES = 10000;
+// Max cached tiles (LRU eviction when exceeded). Kept well below Chrome's
+// cache.keys() limit (~10k entries) which throws "Operation too large".
+const MAX_TILES = 5000;
 
 console.log(`SW: ${CACHE_VERSION} loaded`);
 
@@ -54,12 +55,26 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        // Keep current app + tile caches, and preserve tile caches from older
-        // versions (tiles are map data — still valid across app updates)
-        keys.filter((k) => k !== APP_CACHE && k !== TILE_CACHE && !k.endsWith('-tiles')).map((k) => caches.delete(k))
-      );
+    caches.keys().then(async (keys) => {
+      const current = new Set([APP_CACHE, TILE_CACHE]);
+      const oldTileCaches = keys.filter((k) => !current.has(k) && k.endsWith('-tiles'));
+      const oldAppCaches = keys.filter((k) => !current.has(k) && !k.endsWith('-tiles'));
+
+      // Old tile caches are preserved (tiles are map data — still valid across
+      // app updates). But if a cache grew too large for Chrome to enumerate
+      // (cache.keys() throws "Operation too large"), it can never be evicted
+      // selectively, so reset it entirely.
+      await Promise.all(oldTileCaches.map(async (name) => {
+        try {
+          const cache = await caches.open(name);
+          await cache.keys();
+        } catch {
+          console.warn(`SW: cache ${name} too large to enumerate, resetting`);
+          await caches.delete(name);
+        }
+      }));
+
+      await Promise.all(oldAppCaches.map((k) => caches.delete(k)));
     })
   );
   self.clients.claim();
@@ -149,7 +164,12 @@ const TRANSPARENT_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCA
 
 async function tileStrategy(request) {
   // L1: browser Cache API (instant)
-  const cached = await caches.match(request, { ignoreVary: true });
+  let cached;
+  try {
+    cached = await caches.match(request, { ignoreVary: true });
+  } catch (err) {
+    // Cache may be corrupted or too large to query — fall through to L2/L3
+  }
   if (cached) return cached;
 
   const proxyUrl = `${self.location.origin}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
@@ -159,7 +179,7 @@ async function tileStrategy(request) {
       const cacheResp = new Response(body, { status: 200, headers: { 'Content-Type': ct } });
       const cache = await caches.open(TILE_CACHE);
       cache.put(request, cacheResp.clone());
-      evictOldTiles(cache);
+      evictOldTiles(cache).catch(() => {});
       return cacheResp;
     } catch {
       return new Response(body, { status: 200, headers: { 'Content-Type': ct } });
@@ -201,8 +221,24 @@ function zoomFromUrl(url) {
   return m ? parseInt(m[1], 10) : 99;
 }
 
+let lastEvictCheck = 0;
+
 async function evictOldTiles(cache) {
-  const keys = await cache.keys();
+  // Don't enumerate the whole cache on every tile put — Chrome throws
+  // "Operation too large" when a cache has too many entries to list.
+  const now = Date.now();
+  if (now - lastEvictCheck < 5000) return;
+  lastEvictCheck = now;
+
+  let keys;
+  try {
+    keys = await cache.keys();
+  } catch (err) {
+    // Cache too large to enumerate — can't evict selectively, so reset it.
+    console.warn('SW: tile cache too large, resetting');
+    await caches.delete(TILE_CACHE);
+    return;
+  }
   if (keys.length <= MAX_TILES) return;
   // Protect low-zoom tiles (z ≤ 8) — they cover the most area
   const protectedKeys = [];

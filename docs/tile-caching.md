@@ -42,7 +42,7 @@ See [data-storage.md](data-storage.md) for full details on IndexedDB, `matrix-da
 - **Disk cache limit:** 500 MB with LRU eviction (oldest tiles removed down to 80% when exceeded)
 - **Eviction runs:** at startup and after each new tile is cached
 - **Eviction logging:** written to `matrix-requests.log`
-- **SW Cache API limit:** 10,000 entries with zoom-aware LRU (low-zoom tiles z≤8 protected)
+- **SW Cache API limit:** 5,000 entries with zoom-aware LRU (low-zoom tiles z≤8 protected). Kept below Chrome's `cache.keys()` enumeration limit (~10k) which throws `AbortError: Operation too large`; if a tile cache somehow exceeds it, the service worker resets that cache automatically.
 
 ## URL-based versioning
 
