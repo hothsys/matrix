@@ -1,7 +1,12 @@
 name: PR Summary
 on:
   pull_request_target:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'The PR number to force summarize'
+        required: true
 jobs:
   summary:
     runs-on: ubuntu-latest
@@ -14,7 +19,13 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           script: |
-            const prNumber = context.payload.pull_request.number;
+            const prNumber = context.payload.pull_request 
+              ? context.payload.pull_request.number 
+              : parseInt(github.context.payload.inputs.pr_number);
+              
+            if (!prNumber) {
+              throw new Error("No Pull Request number found or provided!");
+            }
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
