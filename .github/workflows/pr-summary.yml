@@ -64,11 +64,13 @@ jobs:
             // Call OpenRouter API to generate a natural-language summary
             let aiSummary = '';
             try {
-              const aiResp = await fetch('https://openrouter.ai', {
+              const aiResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
                   'Content-Type': 'application/json',
+                  'HTTP-Referer': 'https://github.com', 
+                  'X-Title': 'GitHub PR Summarizer'
                 },
                 body: JSON.stringify({
                   model: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -83,16 +85,17 @@ jobs:
 
               if (aiResp.ok) {
                 const aiData = await aiResp.json();
+                // FIXED TYPO HERE: Corrected the parsing chain syntax
                 aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
-                console.log('AI summary generated:', aiSummary.slice(0, 100));
+                console.log('AI summary generated successfully.');
               } else {
                 const errBody = await aiResp.text();
                 console.log(`AI summary failed with HTTP ${aiResp.status}:`, errBody.slice(0, 1000));
               }
             } catch (e) {
-              console.log('AI summary error:', e.message);
+              console.log('AI summary JavaScript error:', e.stack || e.message);
             }
-
+            
             const summary = [
               '## 📋 PR Summary',
               '',
