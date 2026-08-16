@@ -19,7 +19,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           script: |
-            // Safely parse PR number whether triggered by webhook or manually
             let prNumber;
             if (context.payload.pull_request) {
               prNumber = context.payload.pull_request.number;
@@ -48,7 +47,6 @@ jobs:
               pull_number: prNumber,
             });
 
-            // Build diff context for AI summary — skip CI/workflow files, focus on app code
             const skipDirs = ['.github/', '.circleci/', '.gitlab/'];
             const appFiles = files.filter(f => !skipDirs.some(d => f.filename.startsWith(d)));
             const diffParts = (appFiles.length ? appFiles : files).slice(0, 12).map(f => {
@@ -61,10 +59,10 @@ jobs:
               .filter(m => m && !m.startsWith('Merge'))
               .join('\n');
 
-            // Call OpenRouter API to generate a natural-language summary
             let aiSummary = '';
             try {
-              const aiResp = await fetch('https://openrouter.ai', {
+              // This full path is mandatory for the API to accept chat messages
+              const aiResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -73,9 +71,7 @@ jobs:
                   'X-Title': 'GitHub PR Summarizer'
                 },
                 body: JSON.stringify({
-                  // Force a high-quality free model that respects system prompts
                   model: 'google/gemini-2.5-flash:free',
-                  // Enforce strict JSON output so the model cannot write fluff/preamble
                   response_format: { type: 'json_object' },
                   messages: [
                     { 
@@ -89,14 +85,16 @@ jobs:
                 })
               });
 
+              const rawBody = await aiResp.text();
+
               if (aiResp.ok) {
-                const aiData = await aiResp.json();
-                // FIXED: Cleaned up the broken syntax chain
-                aiSummary = aiData.choices?.[0]?.message?.content?.trim() || '';
+                const aiData = JSON.parse(rawBody);
+                const rawJsonString = aiData.choices?.[0]?.message?.content?.trim() || '{}';
+                const parsedSummary = JSON.parse(rawJsonString);
+                aiSummary = parsedSummary.summary || '';
                 console.log('AI summary generated successfully.');
               } else {
-                const errBody = await aiResp.text();
-                console.log(`AI summary failed with HTTP ${aiResp.status}:`, errBody.slice(0, 1000));
+                console.log(`AI summary failed with HTTP ${aiResp.status}:`, rawBody.slice(0, 1000));
               }
             } catch (e) {
               console.log('AI summary JavaScript error:', e.stack || e.message);
