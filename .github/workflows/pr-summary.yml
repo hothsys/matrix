@@ -61,7 +61,6 @@ jobs:
 
             let aiSummary = '';
             try {
-              // This full path is mandatory for the API to accept chat messages
               const aiResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -71,12 +70,11 @@ jobs:
                   'X-Title': 'GitHub PR Summarizer'
                 },
                 body: JSON.stringify({
-                  model: 'google/gemini-2.5-flash:free',
-                  response_format: { type: 'json_object' },
+                  model: 'openrouter/auto',
                   messages: [
                     { 
                       role: 'system', 
-                      content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. Output your response EXCLUSIVELY as a JSON object with a single key named "summary". Example: {"summary": "Your text here"}. Do not include any thinking or extra keys.' 
+                      content: 'You are a senior software engineer summarizing a pull request for the team. Write 2-4 sentences describing what this PR changes from the USER\'S perspective — what they will see or experience differently. Lead with the most important behavioral change, not implementation details. Do not describe internal mechanisms (caching, classes, event handlers) unless they ARE the feature. Do not use markdown headers or bullet points. Write in third person ("This PR adds..." not "I added..."). Be specific — name the features and UI elements affected. Never end with filler like "aims to improve," "enhances the experience," "improves usability," or any sentence that could apply to any PR. After stating the facts, stop.' 
                     },
                     { role: 'user', content: `PR Title: ${pr.title}\n\nCommit messages:\n${commitList}\n\nDiff:\n${diffContext}` }
                   ],
@@ -89,9 +87,7 @@ jobs:
 
               if (aiResp.ok) {
                 const aiData = JSON.parse(rawBody);
-                const rawJsonString = aiData.choices?.[0]?.message?.content?.trim() || '{}';
-                const parsedSummary = JSON.parse(rawJsonString);
-                aiSummary = parsedSummary.summary || '';
+                aiSummary = aiData.choices[0].message.content.trim() || '';
                 console.log('AI summary generated successfully.');
               } else {
                 console.log(`AI summary failed with HTTP ${aiResp.status}:`, rawBody.slice(0, 1000));
