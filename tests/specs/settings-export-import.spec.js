@@ -1,32 +1,32 @@
-const { test, expect } = require('@playwright/test');
-const { setupApp, uploadTestPhotos, clearState, forceAutoSave } = require('../helpers/test-setup');
+const { test, expect } = require("@playwright/test");
+const { setupApp, uploadTestPhotos, clearState, forceAutoSave } = require("../helpers/test-setup");
 
-test.describe('Settings & Export/Import', () => {
+test.describe("Settings & Export/Import", () => {
   test.beforeEach(async ({ page }) => {
     await setupApp(page);
     await clearState(page);
   });
 
-  test('open settings dropdown', async ({ page }) => {
-    await page.locator('.settings-btn').click();
-    await expect(page.locator('#settings-dropdown')).toHaveClass(/open/);
+  test("open settings dropdown", async ({ page }) => {
+    await page.locator(".settings-btn").click();
+    await expect(page.locator("#settings-dropdown")).toHaveClass(/open/);
   });
 
-  test('close settings on outside click', async ({ page }) => {
-    await page.locator('.settings-btn').click();
-    await expect(page.locator('#settings-dropdown')).toHaveClass(/open/);
+  test("close settings on outside click", async ({ page }) => {
+    await page.locator(".settings-btn").click();
+    await expect(page.locator("#settings-dropdown")).toHaveClass(/open/);
     // Click outside (on the map)
-    await page.locator('#map').click({ position: { x: 100, y: 100 } });
-    await expect(page.locator('#settings-dropdown')).not.toHaveClass(/open/);
+    await page.locator("#map").click({ position: { x: 100, y: 100 } });
+    await expect(page.locator("#settings-dropdown")).not.toHaveClass(/open/);
   });
 
-  test('export data downloads JSON', async ({ page }) => {
-    await uploadTestPhotos(page, ['paris.jpg']);
+  test("export data downloads JSON", async ({ page }) => {
+    await uploadTestPhotos(page, ["paris.jpg"]);
     await forceAutoSave(page);
 
     // Intercept download
     const [download] = await Promise.all([
-      page.waitForEvent('download'),
+      page.waitForEvent("download"),
       page.evaluate(() => exportData()),
     ]);
 
@@ -37,39 +37,41 @@ test.describe('Settings & Export/Import', () => {
     const chunks = [];
     for await (const chunk of content) chunks.push(chunk);
     const raw = Buffer.concat(chunks);
-    const { gunzipSync } = require('zlib');
+    const { gunzipSync } = require("zlib");
     const text = raw[0] === 0x1f && raw[1] === 0x8b ? gunzipSync(raw).toString() : raw.toString();
     const json = JSON.parse(text);
     expect(json.photos).toBeDefined();
     expect(json.photos.length).toBe(1);
   });
 
-  test('import data restores photos', async ({ page }) => {
+  test("import data restores photos", async ({ page }) => {
     // Create a backup JSON to import
     const backupData = {
       version: 2,
       exportedAt: Date.now(),
-      photos: [{
-        id: 'import-test-1',
-        name: 'imported.jpg',
-        date: '2024-01-01',
-        time: '12:00',
-        lat: 51.5074,
-        lng: -0.1278,
-        countryCode: 'GB',
-        placeName: 'London',
-        note: '',
-        thumbUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
-        dataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
-      }],
+      photos: [
+        {
+          id: "import-test-1",
+          name: "imported.jpg",
+          date: "2024-01-01",
+          time: "12:00",
+          lat: 51.5074,
+          lng: -0.1278,
+          countryCode: "GB",
+          placeName: "London",
+          note: "",
+          thumbUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+          dataUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+        },
+      ],
       albums: [],
     };
 
     // Write backup to a temp file via the page and trigger import
     const imported = await page.evaluate(async (data) => {
       // Simulate the import flow
-      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-      const file = new File([blob], 'test-backup.json', { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const file = new File([blob], "test-backup.json", { type: "application/json" });
 
       // Create a FileReader event manually
       const text = await file.text();
@@ -78,10 +80,10 @@ test.describe('Settings & Export/Import', () => {
       // Use the app's internal import logic
       if (parsed.photos) {
         for (const p of parsed.photos) {
-          if (!photos.find(e => e.id === p.id)) {
+          if (!photos.find((e) => e.id === p.id)) {
             photos.push(p);
             photoMap.set(p.id, p);
-            await dbPut('photos', p);
+            await dbPut("photos", p);
           }
         }
         rebuildPhotoList();
@@ -91,27 +93,27 @@ test.describe('Settings & Export/Import', () => {
     }, backupData);
 
     expect(imported).toBe(1);
-    await expect(page.locator('#stat-photos')).toHaveText('1');
+    await expect(page.locator("#stat-photos")).toHaveText("1");
   });
 
-  test('empty map cache clears tiles and shows toast', async ({ page }) => {
+  test("empty map cache clears tiles and shows toast", async ({ page }) => {
     // Pre-create a fake tile file so there's something to delete
     await page.request.post(
-      '/api/tiles/cache?url=https://tiles.openfreemap.org/planet/test/0/0/0.pbf',
-      { data: Buffer.from('fake tile'), headers: { 'Content-Type': 'application/octet-stream' } }
+      "/api/tiles/cache?url=https://tiles.openfreemap.org/planet/test/0/0/0.pbf",
+      { data: Buffer.from("fake tile"), headers: { "Content-Type": "application/octet-stream" } },
     );
 
-    await page.locator('.settings-btn').click();
-    await expect(page.locator('#settings-dropdown')).toHaveClass(/open/);
+    await page.locator(".settings-btn").click();
+    await expect(page.locator("#settings-dropdown")).toHaveClass(/open/);
 
     // Override the beforeEach dismiss handler to accept the confirmation dialog
-    page.removeAllListeners('dialog');
-    page.on('dialog', d => d.accept());
+    page.removeAllListeners("dialog");
+    page.on("dialog", (d) => d.accept());
 
-    await page.locator('.settings-item', { hasText: 'Empty Map Cache' }).click();
+    await page.locator(".settings-item", { hasText: "Empty Map Cache" }).click();
 
     // Success toast confirms tiles were removed
-    await expect(page.locator('#toast')).toContainText('Map cache cleared', { timeout: 5000 });
-    await expect(page.locator('#toast')).toHaveClass(/success/);
+    await expect(page.locator("#toast")).toContainText("Map cache cleared", { timeout: 5000 });
+    await expect(page.locator("#toast")).toHaveClass(/success/);
   });
 });
