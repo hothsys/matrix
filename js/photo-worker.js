@@ -8,11 +8,12 @@
 function parseExifFromBuffer(buf) {
   const view = new DataView(buf);
   let result = { lat: null, lng: null, date: null, time: null };
-  if (view.getUint16(0) !== 0xFFD8) return result; // not JPEG
+  if (view.getUint16(0) !== 0xffd8) return result; // not JPEG
   let offset = 2;
   while (offset < view.byteLength - 1) {
     const marker = view.getUint16(offset);
-    if (marker === 0xFFE1) { // APP1 (EXIF)
+    if (marker === 0xffe1) {
+      // APP1 (EXIF)
       const length = view.getUint16(offset + 2);
       const exifStart = offset + 4;
       // Check "Exif\0\0"
@@ -21,7 +22,7 @@ function parseExifFromBuffer(buf) {
       }
       break;
     }
-    if ((marker & 0xFF00) !== 0xFF00) break;
+    if ((marker & 0xff00) !== 0xff00) break;
     offset += 2 + view.getUint16(offset + 2);
   }
   return result;
@@ -56,13 +57,19 @@ function readExifData(view, tiffStart, end) {
   function getString(tag) {
     if (!tag) return null;
     if (tag.num <= 4) {
-      let s = '';
-      for (let i = 0; i < tag.num; i++) { const c = view.getUint8(tag.valOff + i); if (c) s += String.fromCharCode(c); }
+      let s = "";
+      for (let i = 0; i < tag.num; i++) {
+        const c = view.getUint8(tag.valOff + i);
+        if (c) s += String.fromCharCode(c);
+      }
       return s;
     }
     const off = tiffStart + g32(tag.valOff);
-    let s = '';
-    for (let i = 0; i < Math.min(tag.num, 100); i++) { const c = view.getUint8(off + i); if (c) s += String.fromCharCode(c); }
+    let s = "";
+    for (let i = 0; i < Math.min(tag.num, 100); i++) {
+      const c = view.getUint8(off + i);
+      if (c) s += String.fromCharCode(c);
+    }
     return s;
   }
 
@@ -76,7 +83,7 @@ function readExifData(view, tiffStart, end) {
   }
 
   function getGpsRef(tag) {
-    if (!tag) return '';
+    if (!tag) return "";
     return String.fromCharCode(view.getUint8(tag.valOff));
   }
 
@@ -85,17 +92,19 @@ function readExifData(view, tiffStart, end) {
   const ifd0 = readIFD(tiffStart + ifd0Off);
 
   // Camera make (0x010F) and model (0x0110)
-  const make = getString(ifd0[0x010F]);
+  const make = getString(ifd0[0x010f]);
   const model = getString(ifd0[0x0110]);
   if (model) {
     const m2 = model.trim();
-    const mk = make ? make.trim() : '';
+    const mk = make ? make.trim() : "";
     // If model already starts with make (e.g. "Apple iPhone 15 Pro"), use model as-is
-    result.camera = (mk && m2.toLowerCase().indexOf(mk.toLowerCase()) === 0) ? m2 : (mk ? mk + ' ' + m2 : m2);
+    result.camera =
+      mk && m2.toLowerCase().indexOf(mk.toLowerCase()) === 0 ? m2 : mk ? mk + " " + m2 : m2;
   }
 
   // DateTimeOriginal is in ExifIFD
-  if (ifd0[0x8769]) { // ExifIFD pointer
+  if (ifd0[0x8769]) {
+    // ExifIFD pointer
     const exifOff = g32(ifd0[0x8769].valOff);
     const exifIfd = readIFD(tiffStart + exifOff);
     const dtTag = exifIfd[0x9003] || exifIfd[0x9004] || ifd0[0x0132]; // DateTimeOriginal, DateTimeDigitized, DateTime
@@ -103,7 +112,10 @@ function readExifData(view, tiffStart, end) {
       const dt = getString(dtTag);
       if (dt) {
         const m = dt.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);
-        if (m) { result.date = m[1]+'-'+m[2]+'-'+m[3]; result.time = m[4]+':'+m[5]; }
+        if (m) {
+          result.date = m[1] + "-" + m[2] + "-" + m[3];
+          result.time = m[4] + ":" + m[5];
+        }
       }
     }
   }
@@ -113,7 +125,10 @@ function readExifData(view, tiffStart, end) {
     const dt = getString(ifd0[0x0132]);
     if (dt) {
       const m = dt.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);
-      if (m) { result.date = m[1]+'-'+m[2]+'-'+m[3]; result.time = m[4]+':'+m[5]; }
+      if (m) {
+        result.date = m[1] + "-" + m[2] + "-" + m[3];
+        result.time = m[4] + ":" + m[5];
+      }
     }
   }
 
@@ -126,8 +141,8 @@ function readExifData(view, tiffStart, end) {
     const latRef = getGpsRef(gps[0x0001]);
     const lngRef = getGpsRef(gps[0x0003]);
     if (lat !== null && lng !== null) {
-      result.lat = (latRef === 'S') ? -lat : lat;
-      result.lng = (lngRef === 'W') ? -lng : lng;
+      result.lat = latRef === "S" ? -lat : lat;
+      result.lng = lngRef === "W" ? -lng : lng;
     }
   }
 
@@ -138,18 +153,19 @@ function readExifData(view, tiffStart, end) {
 async function makeThumbnail(blob, maxDim) {
   const bmp = await createImageBitmap(blob);
   const s = Math.min(maxDim / bmp.width, maxDim / bmp.height, 1);
-  const w = Math.round(bmp.width * s), h = Math.round(bmp.height * s);
+  const w = Math.round(bmp.width * s),
+    h = Math.round(bmp.height * s);
   const canvas = new OffscreenCanvas(w, h);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   ctx.drawImage(bmp, 0, 0, w, h);
   bmp.close();
-  const outBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+  const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 });
   return outBlob;
 }
 
 // Convert blob to data URL
 function blobToDataURL(blob) {
-  return new Promise(r => {
+  return new Promise((r) => {
     const fr = new FileReader();
     fr.onload = () => r(fr.result);
     fr.readAsDataURL(blob);
@@ -162,10 +178,7 @@ self.onmessage = async (e) => {
   try {
     const exif = parseExifFromBuffer(arrayBuffer);
     const blob = new Blob([arrayBuffer], { type: file.type });
-    const [dataUrl, thumbBlob] = await Promise.all([
-      blobToDataURL(blob),
-      makeThumbnail(blob, 200)
-    ]);
+    const [dataUrl, thumbBlob] = await Promise.all([blobToDataURL(blob), makeThumbnail(blob, 200)]);
     const thumbUrl = await blobToDataURL(thumbBlob);
     self.postMessage({ id, ok: true, exif, dataUrl, thumbUrl });
   } catch (err) {

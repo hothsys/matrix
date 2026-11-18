@@ -1,4 +1,3 @@
-
 // ═══════════════════════════════════════
 // DEMOS
 // ═══════════════════════════════════════
@@ -6,21 +5,52 @@
 // Ctrl+Shift+D — automated app walkthrough with fake cursor
 // Ctrl+Shift+G — globe rotation demo
 // L/D/T/3/S/G — map style shortcuts  F — fit all pins
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'D') { e.preventDefault(); runDemo(); }
-  if (e.ctrlKey && e.shiftKey && e.key === 'G') { e.preventDefault(); runGlobeDemo(); }
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === "D") {
+    e.preventDefault();
+    runDemo();
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === "G") {
+    e.preventDefault();
+    runGlobeDemo();
+  }
 
   // Map style + navigation shortcuts — skip when typing in inputs or using modifier keys
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "TEXTAREA" ||
+    e.target.tagName === "SELECT"
+  )
+    return;
   if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
   switch (e.key) {
-    case 'l': case 'L': setMapStyle('light'); break;
-    case 'd': case 'D': setMapStyle('dark'); break;
-    case 't': case 'T': setMapStyle('enriched'); break;
-    case '3': setMapStyle('terrain3d'); break;
-    case 's': case 'S': setMapStyle('satellite'); break;
-    case 'g': case 'G': setMapStyle('globe'); break;
-    case 'f': case 'F': fitAll(); break;
+    case "l":
+    case "L":
+      setMapStyle("light");
+      break;
+    case "d":
+    case "D":
+      setMapStyle("dark");
+      break;
+    case "t":
+    case "T":
+      setMapStyle("enriched");
+      break;
+    case "3":
+      setMapStyle("terrain3d");
+      break;
+    case "s":
+    case "S":
+      setMapStyle("satellite");
+      break;
+    case "g":
+    case "G":
+      setMapStyle("globe");
+      break;
+    case "f":
+    case "F":
+      fitAll();
+      break;
   }
 });
 
@@ -28,33 +58,39 @@ document.addEventListener('keydown', e => {
 // APP WALKTHROUGH DEMO (Ctrl+Shift+D)
 // ═══════════════════════════════════════
 function runDemo() {
-  const step = (fn) => new Promise(res => fn(res));
-  const fly = (center, zoom, duration) => step(res => {
-    map.flyTo({ center, zoom, duration });
-    map.once('moveend', res);
-  });
-  const wait = (ms) => new Promise(res => setTimeout(res, ms));
-  const rightClick = (lat, lng) => step(res => {
-    const point = map.project([lng, lat]);
-    map.fire('contextmenu', { lngLat: { lng, lat }, point, preventDefault: () => {} });
-    const poll = setInterval(() => {
-      const btn = document.querySelector('.dest-popup-btn[onclick*="pinEmptyLocation"]');
-      if (btn) { clearInterval(poll); res(btn); }
-    }, 300);
-  });
+  const step = (fn) => new Promise((res) => fn(res));
+  const fly = (center, zoom, duration) =>
+    step((res) => {
+      map.flyTo({ center, zoom, duration });
+      map.once("moveend", res);
+    });
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+  const rightClick = (lat, lng) =>
+    step((res) => {
+      const point = map.project([lng, lat]);
+      map.fire("contextmenu", { lngLat: { lng, lat }, point, preventDefault: () => {} });
+      const poll = setInterval(() => {
+        const btn = document.querySelector('.dest-popup-btn[onclick*="pinEmptyLocation"]');
+        if (btn) {
+          clearInterval(poll);
+          res(btn);
+        }
+      }, 300);
+    });
 
   const hover = (el) => {
-    el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
   };
   const unhover = (el) => {
-    el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
   };
 
   // Fake cursor element
-  const cursor = document.createElement('div');
-  cursor.style.cssText = 'position:fixed;z-index:100000;pointer-events:none;width:32px;height:32px;transition:left .5s ease,top .5s ease,opacity .3s;opacity:0;left:-50px;top:-50px';
+  const cursor = document.createElement("div");
+  cursor.style.cssText =
+    "position:fixed;z-index:100000;pointer-events:none;width:32px;height:32px;transition:left .5s ease,top .5s ease,opacity .3s;opacity:0;left:-50px;top:-50px";
   cursor.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M5 3L19 12L12 13L9 20L5 3Z" fill="white" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>`;
@@ -73,27 +109,29 @@ function runDemo() {
       y = mapRect.top + pt.y;
     }
     cursor.style.transition = `left ${duration}ms ease, top ${duration}ms ease, opacity .3s`;
-    cursor.style.left = x + 'px';
-    cursor.style.top = y + 'px';
-    cursor.style.opacity = '1';
+    cursor.style.left = x + "px";
+    cursor.style.top = y + "px";
+    cursor.style.opacity = "1";
     await wait(duration + 50);
   };
-  const hideCursor = () => { cursor.style.opacity = '0'; };
+  const hideCursor = () => {
+    cursor.style.opacity = "0";
+  };
   const clickPulse = async () => {
-    cursor.style.transition = 'transform .1s';
-    cursor.style.transform = 'scale(0.8)';
+    cursor.style.transition = "transform .1s";
+    cursor.style.transform = "scale(0.8)";
     await wait(100);
-    cursor.style.transform = 'scale(1)';
+    cursor.style.transform = "scale(1)";
     await wait(100);
   };
 
   (async () => {
-    const preExistingIds = new Set(photos.map(p => p.id));
+    const preExistingIds = new Set(photos.map((p) => p.id));
 
     if (activeAlbumId) closeAlbumDetail();
-    switchSideTab('photos');
+    switchSideTab("photos");
     await wait(300);
-    setMapStyle('dark');
+    setMapStyle("dark");
     await wait(1500);
 
     map.jumpTo({ center: [2.3, 46.6], zoom: 4 });
@@ -122,7 +160,7 @@ function runDemo() {
     await wait(1000);
 
     await fly([32.0, 39.9], 1, 2000);
-    setMapStyle('light');
+    setMapStyle("light");
     await wait(2000);
 
     await fly([-62.783, 17.357], 10, 4000);
@@ -130,7 +168,7 @@ function runDemo() {
     await fly([-62.6884, 17.2829], 16, 3000);
     await wait(2000);
 
-    const flags = document.querySelectorAll('#countries-flags span');
+    const flags = document.querySelectorAll("#countries-flags span");
     if (flags.length >= 2) {
       await moveTo(flags[0]);
       hover(flags[0]);
@@ -143,32 +181,32 @@ function runDemo() {
     }
     await wait(500);
 
-    const albumsTab = document.querySelector('.stab:nth-child(3)');
+    const albumsTab = document.querySelector(".stab:nth-child(3)");
     if (albumsTab) {
       await moveTo(albumsTab);
       await clickPulse();
     }
-    switchSideTab('albums');
+    switchSideTab("albums");
     await wait(800);
 
-    const albumCard = document.querySelector('.album-card');
+    const albumCard = document.querySelector(".album-card");
     if (albumCard) {
       await moveTo(albumCard);
       await clickPulse();
       albumCard.click();
       await wait(1000);
 
-      const photoRow = document.querySelector('#alb-detail-body .alb-photo-row');
+      const photoRow = document.querySelector("#alb-detail-body .alb-photo-row");
       if (photoRow) {
         await moveTo(photoRow);
         await clickPulse();
         photoRow.click();
 
-        await step(res => {
+        await step((res) => {
           const poll = setInterval(() => {
-            const lb = document.getElementById('lightbox');
-            const img = document.getElementById('lb-img');
-            if (lb.classList.contains('open') && img && img.complete && img.naturalWidth) {
+            const lb = document.getElementById("lightbox");
+            const img = document.getElementById("lb-img");
+            if (lb.classList.contains("open") && img && img.complete && img.naturalWidth) {
               clearInterval(poll);
               res();
             }
@@ -183,11 +221,11 @@ function runDemo() {
 
     cursor.remove();
 
-    const demoPins = photos.filter(p => p.isEmptyPin && !preExistingIds.has(p.id));
+    const demoPins = photos.filter((p) => p.isEmptyPin && !preExistingIds.has(p.id));
     for (const p of demoPins) {
       photos.splice(photos.indexOf(p), 1);
       photoMap.delete(p.id);
-      dbDel('photos', p.id);
+      dbDel("photos", p.id);
       deletePhotoFiles(p.id);
     }
     if (demoPins.length) {
@@ -202,24 +240,27 @@ function runDemo() {
 // ═══════════════════════════════════════
 let _globeDemoActive = false;
 async function runGlobeDemo() {
-  if (_globeDemoActive) { _globeDemoActive = false; return; }
+  if (_globeDemoActive) {
+    _globeDemoActive = false;
+    return;
+  }
   _globeDemoActive = true;
 
-  setMapStyle('globe');
+  setMapStyle("globe");
 
-  await new Promise(r => setTimeout(r, 1200));
+  await new Promise((r) => setTimeout(r, 1200));
   if (!_globeDemoActive) return;
 
   map.flyTo({ center: [-100, 0], zoom: 2.35, bearing: 0, pitch: 0, duration: 800 });
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 1000));
   if (!_globeDemoActive) return;
 
   // Replace DOM cluster markers with GPU-rendered circle dots — no jitter during rotation
   _animatingMap = true;
-  Object.values(domMarkers).forEach(m => m.remove());
+  Object.values(domMarkers).forEach((m) => m.remove());
   domMarkers = {};
-  const pinSrc = map.getSource('photo-pins');
-  if (pinSrc) pinSrc.setData({ type: 'FeatureCollection', features: [] });
+  const pinSrc = map.getSource("photo-pins");
+  if (pinSrc) pinSrc.setData({ type: "FeatureCollection", features: [] });
 
   // Query Supercluster at the globe zoom to get clusters with counts
   const globeZoom = Math.floor(map.getZoom());
@@ -234,7 +275,12 @@ async function runGlobeDemo() {
       const ccCounts = f.properties.ccCounts;
       if (ccCounts) {
         let max = 0;
-        for (const cc in ccCounts) { if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; } }
+        for (const cc in ccCounts) {
+          if (ccCounts[cc] > max) {
+            max = ccCounts[cc];
+            topCC = cc;
+          }
+        }
       }
       color = _continentColor(lat, lng, topCC);
     } else {
@@ -245,45 +291,45 @@ async function runGlobeDemo() {
     }
     const size = count > 1 ? Math.min(10 + Math.sqrt(count) * 2.5, 22) : 6;
     dotFeatures.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { color, count, size, label: count > 1 ? String(count) : '' }
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      properties: { color, count, size, label: count > 1 ? String(count) : "" },
     });
   }
-  const demoData = { type: 'FeatureCollection', features: dotFeatures };
-  if (!map.getSource('globe-demo-dots')) {
-    map.addSource('globe-demo-dots', { type: 'geojson', data: demoData });
+  const demoData = { type: "FeatureCollection", features: dotFeatures };
+  if (!map.getSource("globe-demo-dots")) {
+    map.addSource("globe-demo-dots", { type: "geojson", data: demoData });
   } else {
-    map.getSource('globe-demo-dots').setData(demoData);
+    map.getSource("globe-demo-dots").setData(demoData);
   }
-  if (!map.getLayer('globe-demo-dots-layer')) {
+  if (!map.getLayer("globe-demo-dots-layer")) {
     map.addLayer({
-      id: 'globe-demo-dots-layer',
-      type: 'circle',
-      source: 'globe-demo-dots',
+      id: "globe-demo-dots-layer",
+      type: "circle",
+      source: "globe-demo-dots",
       paint: {
-        'circle-radius': ['get', 'size'],
-        'circle-color': ['get', 'color'],
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff'
-      }
+        "circle-radius": ["get", "size"],
+        "circle-color": ["get", "color"],
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#ffffff",
+      },
     });
   }
-  if (!map.getLayer('globe-demo-labels-layer')) {
+  if (!map.getLayer("globe-demo-labels-layer")) {
     map.addLayer({
-      id: 'globe-demo-labels-layer',
-      type: 'symbol',
-      source: 'globe-demo-dots',
-      filter: ['>', ['get', 'count'], 1],
+      id: "globe-demo-labels-layer",
+      type: "symbol",
+      source: "globe-demo-dots",
+      filter: [">", ["get", "count"], 1],
       layout: {
-        'text-field': ['get', 'label'],
-        'text-size': 11,
-        'text-font': ['Noto Sans Bold'],
-        'text-allow-overlap': true
+        "text-field": ["get", "label"],
+        "text-size": 11,
+        "text-font": ["Noto Sans Bold"],
+        "text-allow-overlap": true,
       },
       paint: {
-        'text-color': '#ffffff'
-      }
+        "text-color": "#ffffff",
+      },
     });
   }
 
@@ -293,9 +339,12 @@ async function runGlobeDemo() {
   const TOTAL_MS = ROTATIONS * MS_PER_ROTATION;
   const start = performance.now();
 
-  await new Promise(resolve => {
+  await new Promise((resolve) => {
     function frame(now) {
-      if (!_globeDemoActive) { resolve(); return; }
+      if (!_globeDemoActive) {
+        resolve();
+        return;
+      }
       const elapsed = now - start;
       if (elapsed >= TOTAL_MS) {
         resolve();
@@ -309,9 +358,9 @@ async function runGlobeDemo() {
   });
 
   // Cleanup — remove demo layers, restore normal clusters
-  if (map.getLayer('globe-demo-labels-layer')) map.removeLayer('globe-demo-labels-layer');
-  if (map.getLayer('globe-demo-dots-layer')) map.removeLayer('globe-demo-dots-layer');
-  if (map.getSource('globe-demo-dots')) map.removeSource('globe-demo-dots');
+  if (map.getLayer("globe-demo-labels-layer")) map.removeLayer("globe-demo-labels-layer");
+  if (map.getLayer("globe-demo-dots-layer")) map.removeLayer("globe-demo-dots-layer");
+  if (map.getSource("globe-demo-dots")) map.removeSource("globe-demo-dots");
   _animatingMap = false;
   _refreshClustersNow();
   _globeDemoActive = false;

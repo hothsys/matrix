@@ -1,20 +1,20 @@
-const { defineConfig } = require('@playwright/test');
+const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
-  testDir: './specs',
+  testDir: "./specs",
   timeout: 60000,
   expect: { timeout: 10000 },
   retries: 0,
   workers: 1,
-  reporter: [['list']],
+  reporter: [["list"]],
   use: {
-    baseURL: 'http://localhost:8765',
+    baseURL: "http://localhost:8765",
     headless: true,
     viewport: { width: 1280, height: 800 },
-    serviceWorkers: 'block',
+    serviceWorkers: "block",
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
-    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /safari-.*\.spec\.js/ },
+    { name: "chromium", use: { browserName: "chromium" } },
+    { name: "webkit", use: { browserName: "webkit" }, testMatch: /safari-.*\.spec\.js/ },
   ],
 });

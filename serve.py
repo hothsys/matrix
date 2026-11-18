@@ -31,6 +31,7 @@ import logging
 import socket
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+
 # Create an SSL context for downloading vendor files
 # (some Python installs on macOS lack default certificates)
 def _make_ssl_ctx():
@@ -42,8 +43,9 @@ def _make_ssl_ctx():
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
+
 def _urlopen(url, **kwargs):
-    req = kwargs.pop('req', None) or urllib.request.Request(url)
+    req = kwargs.pop("req", None) or urllib.request.Request(url)
     try:
         return urllib.request.urlopen(req, context=_make_ssl_ctx(), **kwargs)
     except urllib.error.URLError:
@@ -53,10 +55,12 @@ def _urlopen(url, **kwargs):
         ctx.verify_mode = ssl.CERT_NONE
         return urllib.request.urlopen(req, context=ctx, **kwargs)
 
+
 def _download(url, dest):
     with _urlopen(url) as resp:
-        with open(dest, 'wb') as f:
+        with open(dest, "wb") as f:
             f.write(resp.read())
+
 
 import argparse
 import shutil
@@ -72,12 +76,13 @@ LOG_FILE = os.path.join(APP_DIR, "matrix-requests.log")
 
 # Set up file logger for tile/GET requests
 MAX_LOG_LINES = 10000
-_req_logger = logging.getLogger('requests')
+_req_logger = logging.getLogger("requests")
 _req_logger.setLevel(logging.INFO)
 _req_handler = logging.FileHandler(LOG_FILE)
-_req_handler.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+_req_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
 _req_logger.addHandler(_req_handler)
 _req_logger.propagate = False
+
 
 def _rotate_log():
     """Keep only the last MAX_LOG_LINES lines in the request log."""
@@ -87,18 +92,21 @@ def _rotate_log():
         size = os.path.getsize(LOG_FILE)
         if size < 1_000_000:  # Only rotate above 1MB
             return
-        with open(LOG_FILE, 'r') as f:
+        with open(LOG_FILE, "r") as f:
             lines = f.readlines()
         if len(lines) > MAX_LOG_LINES:
-            with open(LOG_FILE, 'w') as f:
+            with open(LOG_FILE, "w") as f:
                 f.writelines(lines[-MAX_LOG_LINES:])
     except OSError:
         pass
 
+
 DEPS_FILE = os.path.join(APP_DIR, "dependencies.json")
 
 # Google Fonts to download (woff2 for modern browsers)
-GOOGLE_FONTS_CSS_URL = "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600;700&display=swap"
+GOOGLE_FONTS_CSS_URL = (
+    "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600;700&display=swap"
+)
 
 
 def _load_dependencies():
@@ -112,6 +120,7 @@ def _load_dependencies():
         for filename, url_template in dep["files"].items():
             vendor_files[filename] = url_template.replace("{{version}}", version)
     return deps["vendor"], vendor_files
+
 
 def setup_vendor():
     """Download external dependencies to vendor/ for offline use."""
@@ -153,14 +162,17 @@ def setup_vendor():
             print("    Fetching Google Fonts...")
             os.makedirs(fonts_dir, exist_ok=True)
             # Request with woff2 user-agent to get woff2 format
-            req = urllib.request.Request(GOOGLE_FONTS_CSS_URL, headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-            })
+            req = urllib.request.Request(
+                GOOGLE_FONTS_CSS_URL,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                },
+            )
             with _urlopen(GOOGLE_FONTS_CSS_URL, req=req) as resp:
                 css_text = resp.read().decode("utf-8")
 
             # Download each font file referenced in the CSS
-            font_urls = re.findall(r'url\((https://fonts\.gstatic\.com/[^)]+)\)', css_text)
+            font_urls = re.findall(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", css_text)
             for i, font_url in enumerate(font_urls):
                 font_filename = f"font_{i}.woff2"
                 font_path = os.path.join(fonts_dir, font_filename)
@@ -178,11 +190,12 @@ def setup_vendor():
 
     print("  Vendor setup complete.")
 
+
 # Match /api/photos/{id} and /api/photos/{id}/thumb
 PHOTO_RE = re.compile(r"^/api/photos/([a-zA-Z0-9_-]+)(/thumb)?$")
 
 # Allowed tile origins for the proxy
-TILE_ALLOWED_HOSTS = {'tiles.openfreemap.org', 'tiles.maps.eox.at'}
+TILE_ALLOWED_HOSTS = {"tiles.openfreemap.org", "tiles.maps.eox.at"}
 
 # Video export streaming state: session_id -> {path, file, mime}
 _video_sessions = {}
@@ -191,11 +204,11 @@ _video_lock = threading.Lock()
 
 # Content-Type by extension
 TILE_CONTENT_TYPES = {
-    '.pbf': 'application/x-protobuf',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.json': 'application/json',
+    ".pbf": "application/x-protobuf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".json": "application/json",
 }
 
 
@@ -204,6 +217,7 @@ def ensure_photos_dir():
 
 
 _evict_lock = threading.Lock()
+
 
 def _evict_tiles_if_needed(force=False):
     """Remove oldest tiles when disk cache exceeds MAX_TILES_MB.
@@ -217,7 +231,7 @@ def _evict_tiles_if_needed(force=False):
         total = 0
         for root, _, fnames in os.walk(TILES_DIR):
             for fn in fnames:
-                if fn.endswith('.tmp') or fn.startswith('.'):
+                if fn.endswith(".tmp") or fn.startswith("."):
                     continue
                 fp = os.path.join(root, fn)
                 try:
@@ -231,9 +245,13 @@ def _evict_tiles_if_needed(force=False):
             return 0
         before_mb = total / (1024 * 1024)
         if force:
-            _req_logger.info(f'TILE EVICTION: forced cache clear, removing all {len(files)} files ({before_mb:.1f}MB)')
+            _req_logger.info(
+                f"TILE EVICTION: forced cache clear, removing all {len(files)} files ({before_mb:.1f}MB)"
+            )
         else:
-            _req_logger.info(f'TILE EVICTION: cache at {before_mb:.1f}MB exceeds {MAX_TILES_MB}MB limit, beginning eviction')
+            _req_logger.info(
+                f"TILE EVICTION: cache at {before_mb:.1f}MB exceeds {MAX_TILES_MB}MB limit, beginning eviction"
+            )
         # Sort by modification time (oldest first) and evict
         files.sort()
         evicted = 0
@@ -248,19 +266,23 @@ def _evict_tiles_if_needed(force=False):
                 pass
         after_mb = total / (1024 * 1024)
         if evicted:
-            _req_logger.info(f'TILE EVICTION: removed {evicted} files, {before_mb:.1f}MB → {after_mb:.1f}MB (limit {MAX_TILES_MB}MB)')
+            _req_logger.info(
+                f"TILE EVICTION: removed {evicted} files, {before_mb:.1f}MB → {after_mb:.1f}MB (limit {MAX_TILES_MB}MB)"
+            )
         # Remove empty directories left behind after eviction (e.g. old versioned tile sets
         # like 20260422_001001_pt that are no longer needed after their tiles were evicted).
         # Walk bottom-up so child dirs are removed before parents.
         for root, dirs, fnames in os.walk(TILES_DIR, topdown=False):
             if root == TILES_DIR:
                 continue  # Never remove TILES_DIR itself
-            real_files = [f for f in fnames if not f.startswith('.')]
+            real_files = [f for f in fnames if not f.startswith(".")]
             if not real_files and not dirs:
                 # Remove hidden files (.DS_Store etc.) before rmdir
                 for hf in fnames:
-                    try: os.remove(os.path.join(root, hf))
-                    except OSError: pass
+                    try:
+                        os.remove(os.path.join(root, hf))
+                    except OSError:
+                        pass
                 try:
                     os.rmdir(root)
                 except OSError:
@@ -275,15 +297,15 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=APP_DIR, **kwargs)
 
     # Paths that browsers request automatically; return 204 to suppress 404 noise
-    _SILENT_PATHS = {'/favicon.ico', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'}
+    _SILENT_PATHS = {"/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"}
 
     def end_headers(self):
         # Prevent browser from caching app files and fonts so edits/swaps take effect immediately.
         # Vendor libs (MapLibre, Supercluster, exif-js) are versioned and safe to cache.
-        path = self.path.split('?')[0]
-        is_vendor_lib = path.startswith('/vendor/') and not path.startswith('/vendor/fonts')
-        if not is_vendor_lib and not path.startswith('/api/'):
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        path = self.path.split("?")[0]
+        is_vendor_lib = path.startswith("/vendor/") and not path.startswith("/vendor/fonts")
+        if not is_vendor_lib and not path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         super().end_headers()
 
     def do_GET(self):
@@ -331,7 +353,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         try:
-            if self.path.rstrip('/') == '/api/tiles/clear':
+            if self.path.rstrip("/") == "/api/tiles/clear":
                 self._clear_tile_cache()
                 return
             m = PHOTO_RE.match(self.path)
@@ -347,7 +369,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(b'{}')
+            self.wfile.write(b"{}")
             return
         with open(DATA_FILE, "rb") as f:
             data = f.read()
@@ -422,7 +444,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         # Remove old files with different extensions (e.g. _thumb.jpg when saving _thumb.webp)
         prefix = f"{photo_id}{suffix}."
         for fname in os.listdir(PHOTOS_DIR):
-            if fname.startswith(prefix) and fname != filename and not fname.endswith('.tmp'):
+            if fname.startswith(prefix) and fname != filename and not fname.endswith(".tmp"):
                 os.remove(os.path.join(PHOTOS_DIR, fname))
 
         rel_path = f"matrix-photos/{filename}"
@@ -448,10 +470,10 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         """Send tile response, silently ignoring client disconnects."""
         try:
             self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Content-Length', str(len(data)))
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(data)
         except (ConnectionResetError, BrokenPipeError):
@@ -459,19 +481,21 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def _overpass_query(self):
         """Proxy Overpass API queries through serve.py to bypass network-level browser restrictions."""
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length) if length else b''
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b""
         try:
             req = urllib.request.Request(
-                'https://overpass-api.de/api/interpreter',
+                "https://overpass-api.de/api/interpreter",
                 data=body,
-                headers={'Content-Type': 'application/x-www-form-urlencoded',
-                         'User-Agent': 'Matrix-travel-app/1.0'}
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "Matrix-travel-app/1.0",
+                },
             )
             with _urlopen(req) as resp:
                 data = resp.read()
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(data)
         except Exception as e:
@@ -482,9 +506,10 @@ class MatrixHandler(SimpleHTTPRequestHandler):
     def _proxy_tile(self):
         """Serve tile from disk cache only. Returns 404 if not cached."""
         from urllib.parse import urlparse, parse_qs
-        qs_start = self.path.index('?')
-        params = parse_qs(self.path[qs_start + 1:])
-        url = params.get('url', [None])[0]
+
+        qs_start = self.path.index("?")
+        params = parse_qs(self.path[qs_start + 1 :])
+        url = params.get("url", [None])[0]
         if not url:
             self.send_error(400, "Missing url parameter")
             return
@@ -495,9 +520,9 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         rel_path = parsed.hostname + parsed.path
         tile_path = os.path.join(TILES_DIR, rel_path)
         ext = os.path.splitext(tile_path)[1]
-        content_type = TILE_CONTENT_TYPES.get(ext, 'application/octet-stream')
+        content_type = TILE_CONTENT_TYPES.get(ext, "application/octet-stream")
         if os.path.isfile(tile_path):
-            with open(tile_path, 'rb') as f:
+            with open(tile_path, "rb") as f:
                 data = f.read()
             self._send_tile(data, content_type)
             return
@@ -508,9 +533,10 @@ class MatrixHandler(SimpleHTTPRequestHandler):
     def _cache_tile(self):
         """Save tile data to disk cache (called by SW after fetching from origin)."""
         from urllib.parse import urlparse, parse_qs
-        qs_start = self.path.index('?')
-        params = parse_qs(self.path[qs_start + 1:])
-        url = params.get('url', [None])[0]
+
+        qs_start = self.path.index("?")
+        params = parse_qs(self.path[qs_start + 1 :])
+        url = params.get("url", [None])[0]
         if not url:
             self.send_error(400, "Missing url parameter")
             return
@@ -525,8 +551,8 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         try:
             if not os.path.isdir(tile_path):
                 os.makedirs(os.path.dirname(tile_path), exist_ok=True)
-                tmp = tile_path + '.tmp'
-                with open(tmp, 'wb') as f:
+                tmp = tile_path + ".tmp"
+                with open(tmp, "wb") as f:
                     f.write(data)
                 os.replace(tmp, tile_path)
         except OSError:
@@ -540,72 +566,76 @@ class MatrixHandler(SimpleHTTPRequestHandler):
     def _video_start(self):
         """Start a new video export session, return session ID."""
         from urllib.parse import parse_qs
-        length = int(self.headers.get('Content-Length', 0))
+
+        length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length)) if length else {}
-        mime = body.get('mime', 'video/webm')
-        ext = 'webm' if 'webm' in mime else 'mp4'
+        mime = body.get("mime", "video/webm")
+        ext = "webm" if "webm" in mime else "mp4"
         session_id = f"vid_{int(time.time() * 1000)}"
         path = os.path.join(APP_DIR, f"matrix-video-{session_id}.{ext}")
         with _video_lock:
-            _video_sessions[session_id] = {'path': path, 'file': open(path, 'wb'), 'mime': mime}
+            _video_sessions[session_id] = {"path": path, "file": open(path, "wb"), "mime": mime}
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({'ok': True, 'id': session_id}).encode())
+        self.wfile.write(json.dumps({"ok": True, "id": session_id}).encode())
 
     def _video_chunk(self):
         """Append a video chunk to the session file."""
         from urllib.parse import parse_qs
-        qs = parse_qs(self.path.split('?', 1)[1])
-        session_id = qs.get('id', [None])[0]
-        length = int(self.headers.get('Content-Length', 0))
+
+        qs = parse_qs(self.path.split("?", 1)[1])
+        session_id = qs.get("id", [None])[0]
+        length = int(self.headers.get("Content-Length", 0))
         data = self.rfile.read(length)
         with _video_lock:
             session = _video_sessions.get(session_id)
-            if session and session.get('file'):
-                session['file'].write(data)
+            if session and session.get("file"):
+                session["file"].write(data)
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
 
     def _video_finalize(self):
         """Close the video file and prepare it for download."""
         from urllib.parse import parse_qs
-        qs = parse_qs(self.path.split('?', 1)[1])
-        session_id = qs.get('id', [None])[0]
+
+        qs = parse_qs(self.path.split("?", 1)[1])
+        session_id = qs.get("id", [None])[0]
         with _video_lock:
             session = _video_sessions.get(session_id)
             if not session:
-                self.send_error(404, 'Session not found')
+                self.send_error(404, "Session not found")
                 return
-            if session.get('file'):
-                session['file'].close()
-                session['file'] = None
+            if session.get("file"):
+                session["file"].close()
+                session["file"] = None
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({'ok': True, 'id': session_id}).encode())
+        self.wfile.write(json.dumps({"ok": True, "id": session_id}).encode())
 
     def _download_video(self):
         """Stream the completed video file to the browser for download."""
         from urllib.parse import parse_qs
-        qs = parse_qs(self.path.split('?', 1)[1])
-        session_id = qs.get('id', [None])[0]
+
+        qs = parse_qs(self.path.split("?", 1)[1])
+        session_id = qs.get("id", [None])[0]
         with _video_lock:
             session = _video_sessions.get(session_id)
-        if not session or not os.path.isfile(session['path']):
-            self.send_error(404, 'Video not found')
+        if not session or not os.path.isfile(session["path"]):
+            self.send_error(404, "Video not found")
             return
-        path = session['path']
+        path = session["path"]
         size = os.path.getsize(path)
-        filename = os.path.basename(path).replace(f"-{session_id}", '')
+        filename = os.path.basename(path).replace(f"-{session_id}", "")
         self.send_response(200)
-        self.send_header('Content-Type', session['mime'])
-        self.send_header('Content-Length', str(size))
-        self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+        self.send_header("Content-Type", session["mime"])
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             while chunk := f.read(1024 * 1024):
                 self.wfile.write(chunk)
         # Cleanup session and temp file
@@ -619,18 +649,23 @@ class MatrixHandler(SimpleHTTPRequestHandler):
     def _video_abort(self):
         """Abort a video session and delete the temp file."""
         from urllib.parse import parse_qs
-        qs = parse_qs(self.path.split('?', 1)[1])
-        session_id = qs.get('id', [None])[0]
+
+        qs = parse_qs(self.path.split("?", 1)[1])
+        session_id = qs.get("id", [None])[0]
         with _video_lock:
             session = _video_sessions.pop(session_id, None)
         if session:
-            if session.get('file'):
-                try: session['file'].close()
-                except: pass
-            try: os.remove(session['path'])
-            except: pass
+            if session.get("file"):
+                try:
+                    session["file"].close()
+                except:
+                    pass
+            try:
+                os.remove(session["path"])
+            except:
+                pass
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
 
@@ -640,7 +675,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         if os.path.isdir(TILES_DIR):
             for root, _, fnames in os.walk(TILES_DIR):
                 for fn in fnames:
-                    if fn.startswith('.'):
+                    if fn.startswith("."):
                         continue
                     try:
                         total += os.stat(os.path.join(root, fn)).st_size
@@ -648,9 +683,11 @@ class MatrixHandler(SimpleHTTPRequestHandler):
                     except OSError:
                         pass
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({'bytes': total, 'files': count, 'limitMB': MAX_TILES_MB}).encode())
+        self.wfile.write(
+            json.dumps({"bytes": total, "files": count, "limitMB": MAX_TILES_MB}).encode()
+        )
 
     def _clear_tile_cache(self):
         """Wipe the entire matrix-tiles directory and recreate it empty for a clean state."""
@@ -659,21 +696,23 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             if os.path.isdir(TILES_DIR):
                 # Count files before wiping (excluding hidden files)
                 for root, _, fnames in os.walk(TILES_DIR):
-                    removed += sum(1 for f in fnames if not f.startswith('.'))
+                    removed += sum(1 for f in fnames if not f.startswith("."))
                 shutil.rmtree(TILES_DIR)
             os.makedirs(TILES_DIR, exist_ok=True)
-            _req_logger.info(f'TILE CACHE CLEARED: wiped matrix-tiles directory ({removed} files removed)')
+            _req_logger.info(
+                f"TILE CACHE CLEARED: wiped matrix-tiles directory ({removed} files removed)"
+            )
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({'ok': True, 'removed': removed}).encode())
+            self.wfile.write(json.dumps({"ok": True, "removed": removed}).encode())
         except Exception as e:
-            print(f'Error clearing tile cache: {e}')
+            print(f"Error clearing tile cache: {e}")
             try:
                 self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({'ok': False, 'error': str(e)}).encode())
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode())
             except Exception:
                 pass
 
@@ -690,16 +729,16 @@ def _run_tests(port):
     """Start server with isolated temp data dir, run Playwright tests, cleanup."""
     global DATA_FILE, PHOTOS_DIR, LOG_FILE
 
-    test_dir = tempfile.mkdtemp(prefix='matrix-test-')
-    DATA_FILE = os.path.join(test_dir, 'matrix-data.json')
-    PHOTOS_DIR = os.path.join(test_dir, 'matrix-photos')
-    LOG_FILE = os.path.join(test_dir, 'matrix-requests.log')
+    test_dir = tempfile.mkdtemp(prefix="matrix-test-")
+    DATA_FILE = os.path.join(test_dir, "matrix-data.json")
+    PHOTOS_DIR = os.path.join(test_dir, "matrix-photos")
+    LOG_FILE = os.path.join(test_dir, "matrix-requests.log")
 
     print(f"\n  Matrix — Test Runner")
     print(f"  Test data dir: {test_dir}")
 
     # Generate test fixture images
-    fixture_script = os.path.join(APP_DIR, 'tests', 'fixtures', 'generate-test-images.py')
+    fixture_script = os.path.join(APP_DIR, "tests", "fixtures", "generate-test-images.py")
     if os.path.exists(fixture_script):
         subprocess.run([sys.executable, fixture_script], check=True)
 
@@ -712,7 +751,7 @@ def _run_tests(port):
     try:
         # Check port availability before starting
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(('127.0.0.1', port)) == 0:
+            if s.connect_ex(("127.0.0.1", port)) == 0:
                 print(f"  ERROR: Port {port} is already in use.")
                 print(f"  Stop your other server first, then re-run tests.")
                 sys.exit(1)
@@ -723,17 +762,17 @@ def _run_tests(port):
         server_thread.start()
         print(f"  Test server running on http://localhost:{port}")
 
-        tests_dir = os.path.join(APP_DIR, 'tests')
+        tests_dir = os.path.join(APP_DIR, "tests")
 
         # Install dependencies if needed
-        if not os.path.exists(os.path.join(tests_dir, 'node_modules')):
+        if not os.path.exists(os.path.join(tests_dir, "node_modules")):
             print("  Installing Playwright...")
-            subprocess.run(['npm', 'install'], cwd=tests_dir, check=True)
-            subprocess.run(['npx', 'playwright', 'install', 'chromium'], cwd=tests_dir, check=True)
+            subprocess.run(["npm", "install"], cwd=tests_dir, check=True)
+            subprocess.run(["npx", "playwright", "install", "chromium"], cwd=tests_dir, check=True)
 
         # Run tests
         print()
-        result = subprocess.run(['npx', 'playwright', 'test'], cwd=tests_dir)
+        result = subprocess.run(["npx", "playwright", "test"], cwd=tests_dir)
 
     finally:
         try:
@@ -746,15 +785,17 @@ def _run_tests(port):
 
 
 if __name__ == "__main__":
-    if os.environ.get('MATRIX_RENAMED') != '1':
-        os.environ['MATRIX_RENAMED'] = '1'
+    if os.environ.get("MATRIX_RENAMED") != "1":
+        os.environ["MATRIX_RENAMED"] = "1"
         try:
-            os.execv(sys.executable, [sys.executable, '-X', 'matrix'] + sys.argv)
+            os.execv(sys.executable, [sys.executable, "-X", "matrix"] + sys.argv)
         except Exception:
             pass
-    parser = argparse.ArgumentParser(description='Matrix Local Server')
-    parser.add_argument('port', nargs='?', type=int, default=8765, help='Port number (default: 8765)')
-    parser.add_argument('--run-tests', action='store_true', help='Run Playwright integration tests')
+    parser = argparse.ArgumentParser(description="Matrix Local Server")
+    parser.add_argument(
+        "port", nargs="?", type=int, default=8765, help="Port number (default: 8765)"
+    )
+    parser.add_argument("--run-tests", action="store_true", help="Run Playwright integration tests")
     args = parser.parse_args()
 
     PORT = args.port
@@ -764,6 +805,7 @@ if __name__ == "__main__":
 
     if args.run_tests:
         import subprocess
+
         _run_tests(PORT)
     else:
         print(f"\n  Matrix Travel App")
@@ -777,7 +819,7 @@ if __name__ == "__main__":
         print(f"  Open: http://localhost:{PORT}")
         try:
             lan_ip = socket.gethostbyname(socket.gethostname())
-            if lan_ip and not lan_ip.startswith('127.'):
+            if lan_ip and not lan_ip.startswith("127."):
                 print(f"  LAN:  http://{lan_ip}:{PORT}")
         except Exception:
             pass

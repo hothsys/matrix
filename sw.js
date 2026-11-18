@@ -1,38 +1,38 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v21';
+const CACHE_VERSION = "matrix-v21";
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
 // App shell files to pre-cache on install
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/css/styles.css',
-  '/js/utils.js',
-  '/js/state.js',
-  '/js/map.js',
-  '/js/pins.js',
-  '/js/photos.js',
-  '/js/albums.js',
-  '/js/modals.js',
-  '/js/search.js',
-  '/js/media.js',
-  '/js/photo-worker.js',
-  '/js/data.js',
-  '/js/demo.js',
-  '/vendor/maplibre-gl.js',
-  '/vendor/maplibre-gl.css',
-  '/vendor/supercluster.min.js',
-  '/vendor/fonts.css',
+  "/",
+  "/index.html",
+  "/css/styles.css",
+  "/js/utils.js",
+  "/js/state.js",
+  "/js/map.js",
+  "/js/pins.js",
+  "/js/photos.js",
+  "/js/albums.js",
+  "/js/modals.js",
+  "/js/search.js",
+  "/js/media.js",
+  "/js/photo-worker.js",
+  "/js/data.js",
+  "/js/demo.js",
+  "/vendor/maplibre-gl.js",
+  "/vendor/maplibre-gl.css",
+  "/vendor/supercluster.min.js",
+  "/vendor/fonts.css",
 ];
 
 // Tile URL patterns to cache (raster + vector tiles, sprites, glyphs)
 const TILE_PATTERNS = [
-  /tiles\.openfreemap\.org\/planet\//,  // vector tiles only (not style JSON)
+  /tiles\.openfreemap\.org\/planet\//, // vector tiles only (not style JSON)
   /tiles\.maps\.eox\.at/,
-  /\.pbf(\?|$)/,     // vector tile protobuf files
-  /sprites?\//,       // map sprites
-  /glyphs?\//,        // map font glyphs
+  /\.pbf(\?|$)/, // vector tile protobuf files
+  /sprites?\//, // map sprites
+  /glyphs?\//, // map font glyphs
 ];
 
 // Max cached tiles (LRU eviction when exceeded). Kept well below Chrome's
@@ -41,41 +41,43 @@ const MAX_TILES = 5000;
 
 console.log(`SW: ${CACHE_VERSION} loaded`);
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(APP_CACHE).then((cache) => {
       return cache.addAll(APP_SHELL).catch((err) => {
         // Don't fail install if some files aren't available yet
-        console.warn('SW: Some app shell files not cached:', err);
+        console.warn("SW: Some app shell files not cached:", err);
       });
-    })
+    }),
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then(async (keys) => {
       const current = new Set([APP_CACHE, TILE_CACHE]);
-      const oldTileCaches = keys.filter((k) => !current.has(k) && k.endsWith('-tiles'));
-      const oldAppCaches = keys.filter((k) => !current.has(k) && !k.endsWith('-tiles'));
+      const oldTileCaches = keys.filter((k) => !current.has(k) && k.endsWith("-tiles"));
+      const oldAppCaches = keys.filter((k) => !current.has(k) && !k.endsWith("-tiles"));
 
       // Old tile caches are preserved (tiles are map data — still valid across
       // app updates). But if a cache grew too large for Chrome to enumerate
       // (cache.keys() throws "Operation too large"), it can never be evicted
       // selectively, so reset it entirely.
-      await Promise.all(oldTileCaches.map(async (name) => {
-        try {
-          const cache = await caches.open(name);
-          await cache.keys();
-        } catch {
-          console.warn(`SW: cache ${name} too large to enumerate, resetting`);
-          await caches.delete(name);
-        }
-      }));
+      await Promise.all(
+        oldTileCaches.map(async (name) => {
+          try {
+            const cache = await caches.open(name);
+            await cache.keys();
+          } catch {
+            console.warn(`SW: cache ${name} too large to enumerate, resetting`);
+            await caches.delete(name);
+          }
+        }),
+      );
 
       await Promise.all(oldAppCaches.map((k) => caches.delete(k)));
-    })
+    }),
   );
   self.clients.claim();
 });
@@ -85,27 +87,27 @@ function isTileRequest(url) {
 }
 
 function isLocalApi(url) {
-  return new URL(url).pathname.startsWith('/api/');
+  return new URL(url).pathname.startsWith("/api/");
 }
 
 function isNominatim(url) {
-  return url.includes('nominatim.openstreetmap.org');
+  return url.includes("nominatim.openstreetmap.org");
 }
 
 function isFontFile(url) {
-  return url.includes('/vendor/fonts/') || url.includes('fonts.gstatic.com');
+  return url.includes("/vendor/fonts/") || url.includes("fonts.gstatic.com");
 }
 
 // Network-first for app shell, cache-first for tiles
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = request.url;
 
   // Only handle http(s) requests — ignore chrome-extension://, etc.
-  if (!url.startsWith('http')) return;
+  if (!url.startsWith("http")) return;
 
   // Don't intercept local API calls or POST/DELETE requests
-  if (isLocalApi(url) || request.method !== 'GET') {
+  if (isLocalApi(url) || request.method !== "GET") {
     return;
   }
 
@@ -160,7 +162,12 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-const TRANSPARENT_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII='), c => c.charCodeAt(0));
+const TRANSPARENT_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=",
+  ),
+  (c) => c.charCodeAt(0),
+);
 
 async function tileStrategy(request) {
   // L1: browser Cache API (instant)
@@ -176,29 +183,32 @@ async function tileStrategy(request) {
 
   const cacheAndReturn = async (body, ct) => {
     try {
-      const cacheResp = new Response(body, { status: 200, headers: { 'Content-Type': ct } });
+      const cacheResp = new Response(body, { status: 200, headers: { "Content-Type": ct } });
       const cache = await caches.open(TILE_CACHE);
       cache.put(request, cacheResp.clone());
       evictOldTiles(cache).catch(() => {});
       return cacheResp;
     } catch {
-      return new Response(body, { status: 200, headers: { 'Content-Type': ct } });
+      return new Response(body, { status: 200, headers: { "Content-Type": ct } });
     }
   };
 
   // Race L2 (disk) and L3 (origin) — whichever responds first wins
-  const diskCheck = fetch(proxyUrl).then(r => {
-    if (!r.ok) throw new Error('miss');
-    return r.arrayBuffer().then(body => ({ body, ct: r.headers.get('Content-Type') || 'application/octet-stream' }));
+  const diskCheck = fetch(proxyUrl).then((r) => {
+    if (!r.ok) throw new Error("miss");
+    return r
+      .arrayBuffer()
+      .then((body) => ({ body, ct: r.headers.get("Content-Type") || "application/octet-stream" }));
   });
 
-  const originFetch = fetch(request).then(r => {
-    if (!r.ok) throw new Error('origin error');
-    return r.arrayBuffer().then(body => {
-      const ct = r.headers.get('Content-Type') || 'application/octet-stream';
+  const originFetch = fetch(request).then((r) => {
+    if (!r.ok) throw new Error("origin error");
+    return r.arrayBuffer().then((body) => {
+      const ct = r.headers.get("Content-Type") || "application/octet-stream";
       // Save to disk in background
       fetch(`${self.location.origin}/api/tiles/cache?url=${encodeURIComponent(request.url)}`, {
-        method: 'POST', body: body.slice(0)
+        method: "POST",
+        body: body.slice(0),
       }).catch(() => {});
       return { body, ct };
     });
@@ -210,7 +220,7 @@ async function tileStrategy(request) {
   } catch {
     return new Response(TRANSPARENT_PNG, {
       status: 200,
-      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }
+      headers: { "Content-Type": "image/png", "Cache-Control": "no-store" },
     });
   }
 }
@@ -235,7 +245,7 @@ async function evictOldTiles(cache) {
     keys = await cache.keys();
   } catch (err) {
     // Cache too large to enumerate — can't evict selectively, so reset it.
-    console.warn('SW: tile cache too large, resetting');
+    console.warn("SW: tile cache too large, resetting");
     await caches.delete(TILE_CACHE);
     return;
   }
