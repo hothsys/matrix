@@ -5,10 +5,12 @@
 
 function _updateLbNav() {
   const vis = lbIds.length > 1 ? "" : "none";
-  document.querySelectorAll(".lb-nav-btn").forEach((b) => (b.style.display = vis));
+  document.querySelectorAll(".lb-nav-btn").forEach((b) => {
+    b.style.display = vis;
+  });
 }
 function openLightboxId(id, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   lbIds = photos.map((p) => p.id);
   lbIdx = lbIds.indexOf(id);
   showLbPhoto();
@@ -16,8 +18,8 @@ function openLightboxId(id, e) {
   document.getElementById("lightbox").classList.add("open");
 }
 function openPinLightbox(id, e) {
-  e && e.stopPropagation();
-  lbIds = pinPopupPhotoIds && pinPopupPhotoIds.length ? pinPopupPhotoIds : photos.map((p) => p.id);
+  e?.stopPropagation();
+  lbIds = pinPopupPhotoIds?.length ? pinPopupPhotoIds : photos.map((p) => p.id);
   lbIdx = lbIds.indexOf(id);
   showLbPhoto();
   _updateLbNav();

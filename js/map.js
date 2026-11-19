@@ -92,7 +92,7 @@ function normalizeDarkLabels() {
 // Move all symbol (label) layers above road/line layers so text isn't hidden behind streets.
 function raiseLabelsAboveRoads() {
   const style = map.getStyle();
-  if (!style || !style.layers) return;
+  if (!style?.layers) return;
   const symbolIds = style.layers
     .filter((l) => l.type === "symbol" && l.id !== "photo-pins-layer")
     .map((l) => l.id);
@@ -136,7 +136,7 @@ function _patchStyleBoundaries(styleObj) {
 // - Adds missing ocean point label layer to dark style
 // - Sets ocean fill color for light mode
 function _patchStyleWater(styleObj) {
-  if (!styleObj || !styleObj.layers) return styleObj;
+  if (!styleObj?.layers) return styleObj;
   // Remove unsupported layer types that cause MapLibre v5 validation errors
   styleObj.layers = styleObj.layers.filter((l) => l.type !== "sky");
   if (styleObj.sky) delete styleObj.sky;
@@ -144,7 +144,7 @@ function _patchStyleWater(styleObj) {
   // Strip natural-earth terrain raster in Light Map (not enriched) to speed up rendering
   if (_mapStyle === "light") {
     styleObj.layers = styleObj.layers.filter((l) => l.id !== "natural_earth");
-    if (styleObj.sources) delete styleObj.sources["ne2_shaded"];
+    if (styleObj.sources) delete styleObj.sources.ne2_shaded;
   }
   // Apple Maps Dark palette — neutral dark land, distinctly blue water.
   // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
@@ -204,12 +204,7 @@ function _patchStyleWater(styleObj) {
 
   // Dark style lacks a point-based water label layer — add one for ocean names
   // Guard on openmaptiles source existing (satellite style uses a different source)
-  if (
-    _mapStyle === "dark" &&
-    !hasPointLabel &&
-    styleObj.sources &&
-    styleObj.sources["openmaptiles"]
-  ) {
+  if (_mapStyle === "dark" && !hasPointLabel && styleObj.sources?.openmaptiles) {
     const insertIdx = styleObj.layers.findIndex((l) => l.id === "water_name");
     const pointLayer = {
       id: "water_name_point_label",
@@ -319,7 +314,7 @@ function _scaledTextSize(orig) {
 function applyLabelScale() {
   if (_mapStyle === "satellite" || _mapStyle === "satellite3d") return;
   const style = map.getStyle();
-  if (!style || !style.layers) return;
+  if (!style?.layers) return;
   for (const layer of style.layers) {
     if (layer.id === "photo-pins-layer") continue;
     if (!layer.layout || layer.layout["text-field"] == null || layer.layout["text-field"] === "")
@@ -336,7 +331,7 @@ function applyLabelVisibility() {
   if (_mapStyle === "satellite" || _mapStyle === "satellite3d") return;
   const vis = labelsVisible ? "visible" : "none";
   const style = map.getStyle();
-  if (!style || !style.layers) return;
+  if (!style?.layers) return;
   for (const layer of style.layers) {
     if (layer.id === "photo-pins-layer") continue;
     if (layer.layout && layer.layout["text-field"] != null && layer.layout["text-field"] !== "") {
@@ -357,7 +352,7 @@ function toggleLabels() {
 
 // Apply vivid parks, airport runways, mountain peaks, and optional 3D buildings
 function applyExtraLayers() {
-  const hasOmt = map.getSource && map.getSource("openmaptiles");
+  const hasOmt = map.getSource?.("openmaptiles");
   if (!hasOmt || ["satellite", "satellite3d", "globe"].includes(_mapStyle)) return;
 
   // Vivid park fill — more saturated green over the base park layer
@@ -444,7 +439,7 @@ function applyExtraLayers() {
 }
 
 function apply3DBuildings() {
-  if (!map.getSource || !map.getSource("openmaptiles")) return;
+  if (!map.getSource?.("openmaptiles")) return;
   const noBuildings = ["satellite", "satellite3d", "terrain3d", "globe"];
   const shouldShow = buildings3DVisible && !noBuildings.includes(_mapStyle);
   // Toggle the style's native fill-extrusion layers (OpenFreeMap styles include 3D buildings)
@@ -454,7 +449,9 @@ function apply3DBuildings() {
   );
   if (nativeExtrusions.length) {
     const vis = shouldShow ? "visible" : "none";
-    nativeExtrusions.forEach((l) => map.setLayoutProperty(l.id, "visibility", vis));
+    nativeExtrusions.forEach((l) => {
+      map.setLayoutProperty(l.id, "visibility", vis);
+    });
   } else if (shouldShow && !map.getLayer("matrix-buildings-3d")) {
     // Style lacks native 3D buildings — add custom layer (e.g. dark mode)
     const firstSymbol = styleLayers.find((l) => l.type === "symbol");
@@ -510,11 +507,11 @@ function addPinLayers() {
   }
   // Click handler for canvas-rendered pins
   map.on("click", "photo-pins-layer", (e) => {
-    if (!e.features || !e.features.length) return;
+    if (!e.features?.length) return;
     const f = e.features[0];
     const lat = parseFloat(f.properties.lat);
     const lng = parseFloat(f.properties.lng);
-    if (isNaN(lat) || isNaN(lng)) return;
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
     e.originalEvent.stopPropagation();
     if (_playbackActive) {
       stopPlayback();
@@ -547,7 +544,7 @@ function addPinLayers() {
           curve: 1.0,
           essential: true,
           offset: pitchOffset,
-          easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+          easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
         });
       }
     }
@@ -596,10 +593,10 @@ function applyTheme() {
     terrain3d: "3D Terrain",
     globe: "Globe",
   };
-  if (btn) btn.textContent = (labels[_mapStyle] || _mapStyle) + " ▾";
-  document
-    .querySelectorAll(".style-menu-item")
-    .forEach((el) => el.classList.toggle("active", el.dataset.style === _mapStyle));
+  if (btn) btn.textContent = `${labels[_mapStyle] || _mapStyle} ▾`;
+  document.querySelectorAll(".style-menu-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.style === _mapStyle);
+  });
   _syncExportBtnState();
 }
 // Cache fetched style JSONs so switching between styles is instant after the first load
@@ -609,7 +606,9 @@ const _styleJsonCache = {};
 // Caches raw style JSON by URL so repeat switches skip the network entirely.
 async function _doStyleSwap(style) {
   const go = async () => {
-    Object.keys(_origTextSizes).forEach((k) => delete _origTextSizes[k]);
+    Object.keys(_origTextSizes).forEach((k) => {
+      delete _origTextSizes[k];
+    });
     let styleObj;
     if (typeof style === "string") {
       // Use cached style JSON if available, otherwise fetch and cache
@@ -663,7 +662,9 @@ async function _doStyleSwap(style) {
           seen.add(k);
           ensurePinIcon(p);
         });
-        Object.values(domMarkers).forEach((m) => m.remove());
+        Object.values(domMarkers).forEach((m) => {
+          m.remove();
+        });
         domMarkers = {};
         _refreshClustersNow();
       } else {
@@ -711,7 +712,7 @@ function _initMapOverlays() {
   mapEl.appendChild(exaggerationEl);
   document.getElementById("exaggeration-slider").addEventListener("input", (e) => {
     const val = parseFloat(e.target.value);
-    document.getElementById("exaggeration-val").textContent = val.toFixed(1) + "×";
+    document.getElementById("exaggeration-val").textContent = `${val.toFixed(1)}×`;
     if (map.getTerrain()) map.setTerrain({ source: "terrain-dem", exaggeration: val });
   });
   const coordsEl = document.createElement("div");
@@ -727,7 +728,7 @@ function _initMapOverlays() {
     coordsEl.style.display = "none";
   });
   const updateZoom = () => {
-    zoomEl.textContent = "z" + map.getZoom().toFixed(2);
+    zoomEl.textContent = `z${map.getZoom().toFixed(2)}`;
     const is3D = _mapStyle === "terrain3d" || _mapStyle === "satellite3d";
     if (is3D) {
       pitchWrap.style.display = "flex";
@@ -934,7 +935,7 @@ async function initMap() {
         for (const f of waterHits) {
           if (f.layer.type !== "symbol") continue;
           if (!/water|ocean/.test(f.layer.id)) continue;
-          const n = f.properties["name_en"] || f.properties["name:latin"] || f.properties["name"];
+          const n = f.properties.name_en || f.properties["name:latin"] || f.properties.name;
           if (n) {
             clickedLabel = n;
             break;
@@ -948,7 +949,7 @@ async function initMap() {
           const id = f.layer.id;
           if (id === "photo-pins-layer") continue;
           if (/^(road|highway|water|ferry|aeroway|boundary)/.test(id)) continue;
-          const n = f.properties["name_en"] || f.properties["name:latin"] || f.properties["name"];
+          const n = f.properties.name_en || f.properties["name:latin"] || f.properties.name;
           if (n) {
             clickedLabel = n;
             // Use the feature's actual coordinates for reverse geocode — the click
@@ -981,7 +982,7 @@ async function initMap() {
           if (elev !== null && elev !== undefined) {
             elevationStr = `${Math.round(elev).toLocaleString()}m`;
           }
-        } catch (e) {
+        } catch {
           // Elevation error when zoom exceeds source maxzoom — ignore
         }
       }
@@ -1021,12 +1022,12 @@ async function initMap() {
   // Window-level capture handler — fires before anything else can intercept.
   window.addEventListener(
     "click",
-    function (e) {
+    (e) => {
       const wrapper = e.target.closest?.(".pin-el");
-      if (!wrapper || !wrapper.dataset.lat) return;
+      if (!wrapper?.dataset.lat) return;
       const lat = parseFloat(wrapper.dataset.lat);
       const lng = parseFloat(wrapper.dataset.lng);
-      if (isNaN(lat) || isNaN(lng)) return;
+      if (Number.isNaN(lat) || Number.isNaN(lng)) return;
       try {
         openPinPopup(lat, lng);
       } catch (err) {
@@ -1061,7 +1062,9 @@ function animateMapClean(animFn) {
     m.getElement().style.opacity = "0";
   });
   setTimeout(() => {
-    Object.values(domMarkers).forEach((m) => m.remove());
+    Object.values(domMarkers).forEach((m) => {
+      m.remove();
+    });
     domMarkers = {};
     map.once("moveend", () => {
       _animatingMap = false;
@@ -1119,17 +1122,16 @@ function fitAll(animate = true) {
 // MAP STYLE DROPDOWN
 // ═══════════════════════════════════════
 function toggleStyleMenu(e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   const menu = document.getElementById("style-menu");
   menu.classList.toggle("open");
   // Update active indicator
-  menu
-    .querySelectorAll(".style-menu-item")
-    .forEach((el) => el.classList.toggle("active", el.dataset.style === _mapStyle));
+  menu.querySelectorAll(".style-menu-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.style === _mapStyle);
+  });
 }
 
 function setMapStyle(mode) {
-  const wasDark = _mapStyle === "dark";
   _mapStyle = mode;
   // Persist style preference (satellite/satellite3d reset to previous on reload)
   if (mode !== "satellite" && mode !== "satellite3d") localStorage.setItem("matrix-theme", mode);
@@ -1168,12 +1170,12 @@ function setMapStyle(mode) {
     globe: "Globe",
   };
   const btn = document.getElementById("tb-style-btn");
-  if (btn) btn.textContent = (labels[mode] || mode) + " ▾";
+  if (btn) btn.textContent = `${labels[mode] || mode} ▾`;
 
   // Update active state in menu
-  document
-    .querySelectorAll(".style-menu-item")
-    .forEach((el) => el.classList.toggle("active", el.dataset.style === mode));
+  document.querySelectorAll(".style-menu-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.style === mode);
+  });
 
   // Close the dropdown
   document.getElementById("style-menu").classList.remove("open");

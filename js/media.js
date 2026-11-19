@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 let _photoWorker = null;
-let _photoWorkerCallbacks = {};
+const _photoWorkerCallbacks = {};
 let _photoWorkerId = 0;
 
 function getPhotoWorker() {
@@ -66,7 +66,7 @@ async function processFiles(files) {
           const result = await processFileInWorker(f);
           if (!result.ok) return { err: true };
           return { dk, name: f.name, ...result };
-        } catch (e) {
+        } catch {
           return { err: true };
         }
       }),
@@ -83,7 +83,7 @@ async function processFiles(files) {
       // This keeps IndexedDB lean (~50KB/photo vs ~4MB with base64).
       // Verify the file is accessible before replacing base64 with the path.
       let diskDataUrl = r.dataUrl;
-      if (_autoSaveAvailable && r.dataUrl && r.dataUrl.startsWith("data:")) {
+      if (_autoSaveAvailable && r.dataUrl?.startsWith("data:")) {
         try {
           await fetch(`/api/photos/${photoId}`, {
             method: "POST",

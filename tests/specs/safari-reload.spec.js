@@ -5,7 +5,7 @@ test.describe("Safari Reload Resilience", () => {
   test("map tiles load after initial page load", async ({ page }) => {
     await setupApp(page);
     // Wait for map to be idle (tiles rendered)
-    await page.waitForFunction(() => map && map.loaded() && map.isStyleLoaded(), {
+    await page.waitForFunction(() => map?.loaded() && map.isStyleLoaded(), {
       timeout: 15000,
     });
     // Verify canvas has rendered content (not blank)
@@ -21,7 +21,7 @@ test.describe("Safari Reload Resilience", () => {
 
   test("map tiles survive page reload", async ({ page }) => {
     await setupApp(page);
-    await page.waitForFunction(() => map && map.loaded(), { timeout: 15000 });
+    await page.waitForFunction(() => map?.loaded(), { timeout: 15000 });
 
     // Reload the page
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -31,7 +31,7 @@ test.describe("Safari Reload Resilience", () => {
     );
 
     // Map should load again without getting stuck
-    await page.waitForFunction(() => map && map.loaded() && map.isStyleLoaded(), {
+    await page.waitForFunction(() => map?.loaded() && map.isStyleLoaded(), {
       timeout: 15000,
     });
     const canvas = page.locator("#map canvas");
@@ -42,7 +42,7 @@ test.describe("Safari Reload Resilience", () => {
 
   test("map tiles survive hard reload", async ({ page }) => {
     await setupApp(page);
-    await page.waitForFunction(() => map && map.loaded(), { timeout: 15000 });
+    await page.waitForFunction(() => map?.loaded(), { timeout: 15000 });
 
     // Hard reload — clears cache
     await page.evaluate(() => location.reload(true));
@@ -51,7 +51,7 @@ test.describe("Safari Reload Resilience", () => {
       { timeout: 20000 },
     );
 
-    await page.waitForFunction(() => map && map.loaded() && map.isStyleLoaded(), {
+    await page.waitForFunction(() => map?.loaded() && map.isStyleLoaded(), {
       timeout: 15000,
     });
     const canvas = page.locator("#map canvas");
@@ -137,7 +137,7 @@ test.describe("Safari Reload Resilience", () => {
 
   test("multiple rapid reloads do not break map", async ({ page }) => {
     await setupApp(page);
-    await page.waitForFunction(() => map && map.loaded(), { timeout: 15000 });
+    await page.waitForFunction(() => map?.loaded(), { timeout: 15000 });
 
     // Rapid reload 3 times
     for (let i = 0; i < 3; i++) {
@@ -150,7 +150,7 @@ test.describe("Safari Reload Resilience", () => {
       () => !!document.querySelector("#map canvas") && typeof db !== "undefined" && db !== null,
       { timeout: 20000 },
     );
-    await page.waitForFunction(() => map && map.loaded() && map.isStyleLoaded(), {
+    await page.waitForFunction(() => map?.loaded() && map.isStyleLoaded(), {
       timeout: 15000,
     });
     const canvas = page.locator("#map canvas");

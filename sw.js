@@ -150,16 +150,12 @@ async function networkFirst(request, cacheName) {
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);
   if (cached) return cached;
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (err) {
-    throw err;
+  const response = await fetch(request);
+  if (response.ok) {
+    const cache = await caches.open(cacheName);
+    cache.put(request, response.clone());
   }
+  return response;
 }
 
 const TRANSPARENT_PNG = Uint8Array.from(
@@ -174,7 +170,7 @@ async function tileStrategy(request) {
   let cached;
   try {
     cached = await caches.match(request, { ignoreVary: true });
-  } catch (err) {
+  } catch {
     // Cache may be corrupted or too large to query — fall through to L2/L3
   }
   if (cached) return cached;
@@ -243,7 +239,7 @@ async function evictOldTiles(cache) {
   let keys;
   try {
     keys = await cache.keys();
-  } catch (err) {
+  } catch {
     // Cache too large to enumerate — can't evict selectively, so reset it.
     console.warn("SW: tile cache too large, resetting");
     await caches.delete(TILE_CACHE);

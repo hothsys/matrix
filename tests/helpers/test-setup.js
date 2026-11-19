@@ -1,5 +1,4 @@
-const { expect } = require("@playwright/test");
-const path = require("path");
+const path = require("node:path");
 
 const FIXTURES_DIR = path.join(__dirname, "..", "fixtures");
 
@@ -40,14 +39,16 @@ async function uploadTestPhotos(page, fileNames) {
   await page.waitForFunction(
     () => {
       const toast = document.getElementById("toast");
-      return toast && toast.classList.contains("show") && toast.textContent.includes("Added");
+      return toast?.classList.contains("show") && toast.textContent.includes("Added");
     },
     { timeout: 45000 },
   );
   // Expand all collapsed year groups so photo cards render in the DOM
   // (the app uses virtual scrolling and year groups start collapsed)
   await page.evaluate(() => {
-    document.querySelectorAll(".year-hdr.collapsed").forEach((hdr) => hdr.click());
+    document.querySelectorAll(".year-hdr.collapsed").forEach((hdr) => {
+      hdr.click();
+    });
   });
   // Small settle time for UI to update
   await page.waitForTimeout(500);

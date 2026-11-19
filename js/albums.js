@@ -8,7 +8,7 @@ function albumSortKey(a) {
   const dated = albumPhotos
     .filter((p) => p.date)
     .sort((a, b) => (photoSortKey(a) < photoSortKey(b) ? -1 : 1));
-  return dated.length ? dated[0].date + "T" + (dated[0].time || "00:00") : String(a.createdAt);
+  return dated.length ? `${dated[0].date}T${dated[0].time || "00:00"}` : String(a.createdAt);
 }
 
 function getAlbumPhotos(album) {
@@ -119,7 +119,8 @@ function renderAlbumDetail(albumId) {
     const byDate = {};
     albumPhotos.forEach((p) => {
       const key = p.date || "__nodatecategory__";
-      (byDate[key] = byDate[key] || []).push(p);
+      byDate[key] = byDate[key] || [];
+      byDate[key].push(p);
     });
     Object.keys(byDate)
       .sort()
@@ -158,7 +159,7 @@ function focusPhotoFromAlbum(id) {
 }
 
 async function removePhotoFromAlbum(albumId, photoId, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   const album = albums.find((a) => a.id === albumId);
   if (!album) return;
   album.photoIds = album.photoIds.filter((id) => id !== photoId);
@@ -170,7 +171,7 @@ async function removePhotoFromAlbum(albumId, photoId, e) {
 }
 
 async function deleteAlbum(albumId, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   if (!confirm("Are you sure you want to delete this album?")) return;
   const i = albums.findIndex((a) => a.id === albumId);
   if (i === -1) return;
@@ -256,7 +257,8 @@ function openAddPhotosToAlbum(albumId) {
   const byYear = {};
   available.forEach((p) => {
     const yr = p.date ? p.date.slice(0, 4) : "Undated";
-    (byYear[yr] = byYear[yr] || []).push(p);
+    byYear[yr] = byYear[yr] || [];
+    byYear[yr].push(p);
   });
   const years = Object.keys(byYear).sort((a, b) => {
     if (a === "Undated") return 1;

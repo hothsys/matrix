@@ -2,10 +2,12 @@
 // SIDEBAR TABS
 // ═══════════════════════════════════════
 function switchSideTab(tab) {
-  document
-    .querySelectorAll(".stab")
-    .forEach((b, i) => b.classList.toggle("active", ["photos", "timeline", "albums"][i] === tab));
-  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+  document.querySelectorAll(".stab").forEach((b, i) => {
+    b.classList.toggle("active", ["photos", "timeline", "albums"][i] === tab);
+  });
+  document.querySelectorAll(".tab-panel").forEach((p) => {
+    p.classList.remove("active");
+  });
   document.getElementById(`tab-${tab}`).classList.add("active");
 }
 
@@ -100,7 +102,7 @@ function toggleCountriesBar() {
   const collapsed = flagsEl.classList.contains("collapsed");
   if (collapsed) {
     // Expand: set max-height to actual content height for smooth animation
-    flagsEl.style.maxHeight = flagsEl.scrollHeight + "px";
+    flagsEl.style.maxHeight = `${flagsEl.scrollHeight}px`;
     flagsEl.classList.remove("collapsed");
     toggle.classList.add("expanded");
     // After transition, remove inline max-height so it can grow if flags change
@@ -109,7 +111,7 @@ function toggleCountriesBar() {
     }, 300);
   } else {
     // Collapse: set current height first, then animate to collapsed height
-    flagsEl.style.maxHeight = flagsEl.scrollHeight + "px";
+    flagsEl.style.maxHeight = `${flagsEl.scrollHeight}px`;
     requestAnimationFrame(() => {
       flagsEl.classList.add("collapsed");
       flagsEl.style.maxHeight = "";
@@ -118,7 +120,7 @@ function toggleCountriesBar() {
   }
 }
 // Country flag hover → show name in status bar
-(function () {
+(() => {
   const flagsEl = document.getElementById("countries-flags");
   const statusEl = document.getElementById("cb-status");
   flagsEl.addEventListener("mouseover", (e) => {
@@ -230,7 +232,7 @@ document.getElementById("sidebar-toggle").addEventListener("click", () => {
 // SETTINGS MENU
 // ═══════════════════════════════════════
 function toggleSettingsMenu(e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   const dd = document.getElementById("settings-dropdown");
   dd.classList.toggle("open");
   updateAutoSaveIndicator();
@@ -334,7 +336,7 @@ async function _doExport() {
   const exportPhotos = photos
     .filter((p) => !p.isEmptyPin)
     .map((p) => {
-      if (p.dataUrl && p.dataUrl.startsWith("data:")) {
+      if (p.dataUrl?.startsWith("data:")) {
         const { dataUrl, ...rest } = p;
         const ext = dataUrl.match(/data:image\/(\w+)/)?.[1] === "png" ? "png" : "jpg";
         return { ...rest, dataUrl: `matrix-photos/${p.id}.${ext}` };
@@ -539,7 +541,7 @@ async function fetchAsDataUrl(url) {
 
 async function checkAutoSaveServer() {
   try {
-    const r = await fetch("/api/data", { method: "GET" });
+    await fetch("/api/data", { method: "GET" });
     _autoSaveAvailable = true;
   } catch {
     _autoSaveAvailable = false;
@@ -563,7 +565,7 @@ async function uploadPhotoFile(photo) {
     return;
   }
   // Upload full-size image
-  if (photo.dataUrl && photo.dataUrl.startsWith("data:")) {
+  if (photo.dataUrl?.startsWith("data:")) {
     await fetch(`/api/photos/${photo.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -571,7 +573,7 @@ async function uploadPhotoFile(photo) {
     });
   }
   // Upload thumbnail
-  if (photo.thumbUrl && photo.thumbUrl.startsWith("data:")) {
+  if (photo.thumbUrl?.startsWith("data:")) {
     await fetch(`/api/photos/${photo.id}/thumb`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -603,7 +605,7 @@ async function autoSave() {
       if (p.isEmptyPin) return { ...p }; // empty pins have no image files
       const imgExt =
         p.dataUrl && p.dataUrl.match(/data:image\/(\w+)/)?.[1] === "png" ? "png" : "jpg";
-      const thumbMatch = p.thumbUrl && p.thumbUrl.match(/data:image\/(\w+)/);
+      const thumbMatch = p.thumbUrl?.match(/data:image\/(\w+)/);
       const thumbExt = thumbMatch ? (thumbMatch[1] === "jpeg" ? "jpg" : thumbMatch[1]) : imgExt;
       return {
         ...p,
@@ -670,7 +672,9 @@ async function checkAutoRestore() {
         buildClusterIndex();
       }
       // Mark photos as already on disk so auto-save doesn't re-upload them
-      photos.forEach((p) => _savedPhotoDisk.add(p.id));
+      photos.forEach((p) => {
+        _savedPhotoDisk.add(p.id);
+      });
 
       // Sync: check if disk has photos missing from this browser
       if (Array.isArray(data.photos) && data.photos.length) {
@@ -739,7 +743,9 @@ async function checkAutoRestore() {
       }
       await doImport(data);
       // Mark all restored photos as already on disk
-      data.photos.forEach((p) => _savedPhotoDisk.add(p.id));
+      data.photos.forEach((p) => {
+        _savedPhotoDisk.add(p.id);
+      });
     }
   } catch {
     // No backup or can't read — fine
@@ -862,7 +868,11 @@ if ("serviceWorker" in navigator && !isSafari) {
     .catch((err) => console.warn("SW registration failed:", err));
 } else if (isSafari && navigator.serviceWorker) {
   // Unregister any existing SW in Safari to clean up stale state
-  navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+  navigator.serviceWorker.getRegistrations().then((regs) =>
+    regs.forEach((r) => {
+      r.unregister();
+    }),
+  );
 }
 
 // Show offline banner on load if needed
