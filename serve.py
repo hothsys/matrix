@@ -18,18 +18,18 @@ Endpoints:
 
 import base64
 import json
+import logging
 import os
 import re
+import socket
+import ssl
 import sys
-import webbrowser
 import threading
 import time
-import ssl
-import urllib.request
 import urllib.error
-import logging
-import socket
-from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
+import urllib.request
+import webbrowser
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 
 # Create an SSL context for downloading vendor files
@@ -57,12 +57,12 @@ def _urlopen(url, **kwargs):
 
 
 def _download(url, dest):
-    with _urlopen(url) as resp:
-        with open(dest, "wb") as f:
-            f.write(resp.read())
+    with _urlopen(url) as resp, open(dest, "wb") as f:
+        f.write(resp.read())
 
 
 import argparse
+import contextlib
 import shutil
 import tempfile
 
@@ -92,7 +92,7 @@ def _rotate_log():
         size = os.path.getsize(LOG_FILE)
         if size < 1_000_000:  # Only rotate above 1MB
             return
-        with open(LOG_FILE, "r") as f:
+        with open(LOG_FILE) as f:
             lines = f.readlines()
         if len(lines) > MAX_LOG_LINES:
             with open(LOG_FILE, "w") as f:
@@ -112,7 +112,7 @@ GOOGLE_FONTS_CSS_URL = (
 def _load_dependencies():
     """Load vendor dependencies from dependencies.json."""
     deps_file = os.path.join(APP_DIR, "dependencies.json")
-    with open(deps_file, "r") as f:
+    with open(deps_file) as f:
         deps = json.load(f)
     vendor_files = {}
     for dep in deps["vendor"]:
@@ -155,7 +155,7 @@ def setup_vendor():
             _download(url, dest)
         except Exception as e:
             print(f"    Warning: Could not download {name}: {e}")
-            print(f"    The app will fall back to CDN URLs when online.")
+            print("    The app will fall back to CDN URLs when online.")
 
     if need_fonts:
         try:
@@ -255,7 +255,7 @@ def _evict_tiles_if_needed(force=False):
         # Sort by modification time (oldest first) and evict
         files.sort()
         evicted = 0
-        for mtime, size, fp in files:
+        for _mtime, size, fp in files:
             if not force and total <= limit * 0.8:  # Evict down to 80% to avoid thrashing
                 break
             try:
@@ -279,14 +279,10 @@ def _evict_tiles_if_needed(force=False):
             if not real_files and not dirs:
                 # Remove hidden files (.DS_Store etc.) before rmdir
                 for hf in fnames:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.remove(os.path.join(root, hf))
-                    except OSError:
-                        pass
-                try:
+                with contextlib.suppress(OSError):
                     os.rmdir(root)
-                except OSError:
-                    pass
         return evicted
     finally:
         _evict_lock.release()
@@ -297,7 +293,9 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=APP_DIR, **kwargs)
 
     # Paths that browsers request automatically; return 204 to suppress 404 noise
-    _SILENT_PATHS = {"/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"}
+    _SILENT_PATHS = frozenset(
+        {"/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"}
+    )
 
     def end_headers(self):
         # Prevent browser from caching app files and fonts so edits/swaps take effect immediately.
@@ -505,7 +503,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def _proxy_tile(self):
         """Serve tile from disk cache only. Returns 404 if not cached."""
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import parse_qs, urlparse
 
         qs_start = self.path.index("?")
         params = parse_qs(self.path[qs_start + 1 :])
@@ -532,7 +530,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def _cache_tile(self):
         """Save tile data to disk cache (called by SW after fetching from origin)."""
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import parse_qs, urlparse
 
         qs_start = self.path.index("?")
         params = parse_qs(self.path[qs_start + 1 :])
@@ -565,7 +563,6 @@ class MatrixHandler(SimpleHTTPRequestHandler):
 
     def _video_start(self):
         """Start a new video export session, return session ID."""
-        from urllib.parse import parse_qs
 
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length)) if length else {}
@@ -641,10 +638,8 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         # Cleanup session and temp file
         with _video_lock:
             _video_sessions.pop(session_id, None)
-        try:
+        with contextlib.suppress(OSError):
             os.remove(path)
-        except OSError:
-            pass
 
     def _video_abort(self):
         """Abort a video session and delete the temp file."""
@@ -656,14 +651,10 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             session = _video_sessions.pop(session_id, None)
         if session:
             if session.get("file"):
-                try:
+                with contextlib.suppress(BaseException):
                     session["file"].close()
-                except:
-                    pass
-            try:
+            with contextlib.suppress(BaseException):
                 os.remove(session["path"])
-            except:
-                pass
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -695,7 +686,7 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             removed = 0
             if os.path.isdir(TILES_DIR):
                 # Count files before wiping (excluding hidden files)
-                for root, _, fnames in os.walk(TILES_DIR):
+                for _root, _, fnames in os.walk(TILES_DIR):
                     removed += sum(1 for f in fnames if not f.startswith("."))
                 shutil.rmtree(TILES_DIR)
             os.makedirs(TILES_DIR, exist_ok=True)
@@ -734,7 +725,7 @@ def _run_tests(port):
     PHOTOS_DIR = os.path.join(test_dir, "matrix-photos")
     LOG_FILE = os.path.join(test_dir, "matrix-requests.log")
 
-    print(f"\n  Matrix — Test Runner")
+    print("\n  Matrix — Test Runner")
     print(f"  Test data dir: {test_dir}")
 
     # Generate test fixture images
@@ -743,17 +734,15 @@ def _run_tests(port):
         subprocess.run([sys.executable, fixture_script], check=True)
 
     # Setup vendor deps
-    try:
+    with contextlib.suppress(Exception):
         setup_vendor()
-    except Exception:
-        pass
 
     try:
         # Check port availability before starting
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(("127.0.0.1", port)) == 0:
                 print(f"  ERROR: Port {port} is already in use.")
-                print(f"  Stop your other server first, then re-run tests.")
+                print("  Stop your other server first, then re-run tests.")
                 sys.exit(1)
 
         # Start server in background
@@ -775,10 +764,8 @@ def _run_tests(port):
         result = subprocess.run(["npx", "playwright", "test"], cwd=tests_dir)
 
     finally:
-        try:
+        with contextlib.suppress(Exception):
             server.shutdown()
-        except Exception:
-            pass
         shutil.rmtree(test_dir, ignore_errors=True)
 
     sys.exit(result.returncode)
@@ -787,10 +774,8 @@ def _run_tests(port):
 if __name__ == "__main__":
     if os.environ.get("MATRIX_RENAMED") != "1":
         os.environ["MATRIX_RENAMED"] = "1"
-        try:
-            os.execv(sys.executable, [sys.executable, "-X", "matrix"] + sys.argv)
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            os.execv(sys.executable, [sys.executable, "-X", "matrix", *sys.argv])
     parser = argparse.ArgumentParser(description="Matrix Local Server")
     parser.add_argument(
         "port", nargs="?", type=int, default=8765, help="Port number (default: 8765)"
@@ -808,12 +793,12 @@ if __name__ == "__main__":
 
         _run_tests(PORT)
     else:
-        print(f"\n  Matrix Travel App")
+        print("\n  Matrix Travel App")
         try:
             setup_vendor()
         except Exception as e:
             print(f"  Warning: Vendor setup failed: {e}")
-            print(f"  The app will use CDN URLs when online.")
+            print("  The app will use CDN URLs when online.")
         ThreadingHTTPServer.allow_reuse_address = True
         server = ThreadingHTTPServer(("0.0.0.0", PORT), MatrixHandler)
         print(f"  Open: http://localhost:{PORT}")
@@ -830,7 +815,7 @@ if __name__ == "__main__":
         # Trim tile cache and rotate log on startup
         _rotate_log()
         threading.Thread(target=_evict_tiles_if_needed, daemon=True).start()
-        print(f"  Press Ctrl+C to stop\n")
+        print("  Press Ctrl+C to stop\n")
         threading.Thread(target=open_browser, daemon=True).start()
         try:
             server.serve_forever()
