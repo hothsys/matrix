@@ -2,8 +2,8 @@
 """Generate test JPEG images with EXIF GPS data for Playwright tests.
 Pure Python — no external dependencies required."""
 
-import struct
 import os
+import struct
 
 FIXTURES_DIR = os.path.dirname(os.path.abspath(__file__))
 

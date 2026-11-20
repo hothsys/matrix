@@ -94,7 +94,7 @@ function ensureEmptyPinIcon() {
 // Create a circular photo icon on an offscreen canvas and add it to the map
 function ensurePinIcon(photo) {
   if (photo.isEmptyPin) return ensureEmptyPinIcon();
-  const iconId = "pin-" + photo.id;
+  const iconId = `pin-${photo.id}`;
   if (_pinIconsAdded.has(iconId) && map.hasImage(iconId)) return iconId;
   if (!photo.thumbUrl) return null;
   _pinIconsAdded.add(iconId); // mark as in-progress to avoid duplicates
@@ -237,7 +237,9 @@ function buildClusterIndex() {
       requestAnimationFrame(processIconBatch);
     } else {
       _animatingMap = false;
-      Object.values(domMarkers).forEach((m) => m.remove());
+      Object.values(domMarkers).forEach((m) => {
+        m.remove();
+      });
       domMarkers = {};
       _refreshClustersNow();
     }
@@ -330,7 +332,7 @@ function _refreshClustersNow() {
       const repPhoto = photoMap.get(pid);
       if (!repPhoto) return;
 
-      const iconId = repPhoto.isEmptyPin ? "pin-empty" : "pin-" + pid;
+      const iconId = repPhoto.isEmptyPin ? "pin-empty" : `pin-${pid}`;
       // Ensure the icon exists; create it if not yet loaded
       if (!map.hasImage(iconId)) {
         ensurePinIcon(repPhoto);
@@ -529,7 +531,9 @@ function switchPTab(btn, id) {
   btn
     .closest(".popup-wrap")
     .querySelectorAll(".ptab-btn")
-    .forEach((b) => b.classList.remove("active"));
+    .forEach((b) => {
+      b.classList.remove("active");
+    });
   btn.classList.add("active");
   ["ptab-gallery", "ptab-notes"].forEach((t) => {
     const el = document.getElementById(t);
@@ -538,7 +542,7 @@ function switchPTab(btn, id) {
 }
 
 async function rmPhotoFromPin(id, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   if (!confirm("Remove this photo from the pin?")) return;
   const p = photoMap.get(id);
   if (!p) return;

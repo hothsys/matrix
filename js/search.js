@@ -53,11 +53,13 @@ function setSearchCat(cat) {
   document.getElementById("search-cat-label").textContent =
     cat === "all" ? "All" : POI_CATEGORIES[cat].label;
   document.getElementById("search-cat-btn").classList.toggle("active", cat !== "all");
-  document
-    .querySelectorAll(".search-cat-item")
-    .forEach((el) => el.classList.toggle("active", el.dataset.cat === cat));
+  document.querySelectorAll(".search-cat-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.cat === cat);
+  });
   document.getElementById("search-cat-menu").classList.remove("open");
-  Object.keys(_searchCache).forEach((k) => delete _searchCache[k]);
+  Object.keys(_searchCache).forEach((k) => {
+    delete _searchCache[k];
+  });
   const q = dInput.value.trim();
   if (q.length >= 2) {
     dResults.style.display = "block";
@@ -407,7 +409,9 @@ async function runDestSearch(q) {
   }
   dResults.style.display = "block";
   dLoading.style.display = "block";
-  dResults.querySelectorAll(".dest-item,.dest-divider").forEach((el) => el.remove());
+  dResults.querySelectorAll(".dest-item,.dest-divider").forEach((el) => {
+    el.remove();
+  });
 
   // Detect GPS coordinate input (e.g. "48.8566, 2.3522" or "48.8566° N, 2.3522° E")
   const coordMatch = q
@@ -546,7 +550,6 @@ function flyTo(item) {
     if (destMarkerObj.popup) destMarkerObj.popup.remove();
     destMarkerObj = null;
   }
-  const dw = document.createElement("div");
   const el = document.createElement("div");
   el.className = "dest-pin-el";
   el.innerHTML = '<div class="dest-pin-el-inner">📍</div>';
@@ -594,7 +597,7 @@ async function pinEmptyLocation(lat, lng) {
   const geoName = _geoCache[cacheKey] || null;
   const cc = _geoCodeCache[cacheKey] || null;
   const pin = {
-    id: "pin-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    id: `pin-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     lat,
     lng,
     placeName: geoName,
@@ -615,12 +618,12 @@ async function pinEmptyLocation(lat, lng) {
   showToast("Location pinned ✓", "success");
 }
 function reopenDestPopup() {
-  if (!destMarkerObj || !destMarkerObj.marker) return;
+  if (!destMarkerObj?.marker) return;
   // Remove existing popup if any
   if (destMarkerObj.popup) {
     try {
       destMarkerObj.popup.remove();
-    } catch (e) {}
+    } catch {}
   }
   const lngLat = destMarkerObj.marker.getLngLat();
   const lat = lngLat.lat,

@@ -31,14 +31,14 @@ test.describe("Photo Upload", () => {
   test("progress bar appears during upload", async ({ page }) => {
     // Start upload and check progress visibility
     const fileInput = page.locator("#file-input");
-    const path = require("path");
+    const path = require("node:path");
     const fixturePath = path.join(__dirname, "..", "fixtures", "paris.jpg");
     await fileInput.setInputFiles(fixturePath);
     // Progress should appear briefly
     await page.waitForFunction(
       () => {
         const toast = document.getElementById("toast");
-        return toast && toast.classList.contains("show");
+        return toast?.classList.contains("show");
       },
       { timeout: 15000 },
     );

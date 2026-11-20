@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════
-let photos = [];
-let albums = [];
+const photos = [];
+const albums = [];
 let lbIds = [],
   lbIdx = 0;
 let modalMode = null; // 'photo-meta' | 'new-album' | 'edit-album' | 'pick-photos'
@@ -129,7 +129,9 @@ const dbPutBatch = (store, objects) =>
   new Promise((r, j) => {
     const t = db.transaction(store, "readwrite");
     const s = t.objectStore(store);
-    objects.forEach((o) => s.put(o));
+    objects.forEach((o) => {
+      s.put(o);
+    });
     t.oncomplete = r;
     t.onerror = j;
   });

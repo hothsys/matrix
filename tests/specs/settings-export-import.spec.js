@@ -37,7 +37,7 @@ test.describe("Settings & Export/Import", () => {
     const chunks = [];
     for await (const chunk of content) chunks.push(chunk);
     const raw = Buffer.concat(chunks);
-    const { gunzipSync } = require("zlib");
+    const { gunzipSync } = require("node:zlib");
     const text = raw[0] === 0x1f && raw[1] === 0x8b ? gunzipSync(raw).toString() : raw.toString();
     const json = JSON.parse(text);
     expect(json.photos).toBeDefined();

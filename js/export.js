@@ -14,7 +14,7 @@ let _exportPhotoImg = null; // preloaded Image for current lightbox photo
 
 function exportUpdateProgress(text, pct) {
   document.getElementById("export-progress").textContent = text;
-  document.getElementById("export-bar").style.width = pct + "%";
+  document.getElementById("export-bar").style.width = `${pct}%`;
 }
 
 function drawExportFrame() {
@@ -23,12 +23,7 @@ function drawExportFrame() {
   const w = _exportCanvas.width,
     h = _exportCanvas.height;
 
-  if (
-    _exportShowPhoto &&
-    _exportPhotoImg &&
-    _exportPhotoImg.complete &&
-    _exportPhotoImg.naturalWidth
-  ) {
+  if (_exportShowPhoto && _exportPhotoImg?.complete && _exportPhotoImg.naturalWidth) {
     // Photo mode: dark bg + photo + caption
     _exportCtx.fillStyle = "#000";
     _exportCtx.fillRect(0, 0, w, h);
@@ -57,7 +52,7 @@ function drawExportFrame() {
     // Caption
     const cap = document.getElementById("lb-caption").textContent;
     if (cap) {
-      _exportCtx.font = "500 " + Math.round(h * 0.024) + 'px "DM Sans", sans-serif';
+      _exportCtx.font = `500 ${Math.round(h * 0.024)}px "DM Sans", sans-serif`;
       _exportCtx.fillStyle = "rgba(255,255,255,0.85)";
       _exportCtx.textAlign = "center";
       _exportCtx.fillText(cap, w / 2, h * 0.93);
@@ -83,7 +78,7 @@ function exportAnimateFade(startVal, endVal, durationMs) {
     function step(now) {
       const t = Math.min((now - start) / durationMs, 1);
       // Smooth ease in-out
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const ease = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
       _exportFade = startVal + (endVal - startVal) * ease;
       if (t < 1) requestAnimationFrame(step);
       else {
@@ -242,7 +237,7 @@ async function exportVideo() {
   // Setup MediaRecorder
   const stream = _exportCanvas.captureStream(30);
   const mimeTypes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
-  let mime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
+  const mime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
   // Start a disk-streaming session — chunks written directly to disk, not held in memory
   _exportChunks = [];
   let _videoSessionId = null;
@@ -311,7 +306,7 @@ async function exportVideo() {
         speed: 0.6,
         curve: 1.0,
         essential: true,
-        easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+        easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
       });
     });
     if (!_exporting) break;

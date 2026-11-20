@@ -111,7 +111,7 @@ function refreshPinDropdown() {
 
 function applyPinSelection() {
   const sel = document.getElementById("m-pin-select");
-  if (!sel || !sel.value) return;
+  if (!sel?.value) return;
   const [lat, lng] = sel.value.split("_").map(Number);
   document.getElementById("m-lat").value = lat.toFixed(6);
   document.getElementById("m-lng").value = lng.toFixed(6);
@@ -120,13 +120,13 @@ function applyPinSelection() {
   const pins = year ? getPinsForYear(year) : [];
   const pin = pins.find((p) => Math.abs(p.lat - lat) < 0.0001 && Math.abs(p.lng - lng) < 0.0001);
   const placeInput = document.getElementById("m-place");
-  if (placeInput && pin && pin.placeName && !pin.placeName.includes("°")) {
+  if (placeInput && pin?.placeName && !pin.placeName.includes("°")) {
     placeInput.value = pin.placeName;
   }
 }
 
 function openPhotoMetaModal(id, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   const p = photoMap.get(id);
   if (!p) return;
   metaEditId = id;
@@ -145,7 +145,7 @@ function openPhotoMetaModal(id, e) {
       <select class="fi" id="m-pin-select" onchange="applyPinSelection()" ${p.date ? "" : "disabled"}>
         <option value="">— Select a pin —</option>
       </select>
-      <div class="fhint" id="m-pin-hint">${p.date ? "Showing pins from photos in " + p.date.slice(0, 4) : "Set a date above to enable pin selection"}</div>
+      <div class="fhint" id="m-pin-hint">${p.date ? `Showing pins from photos in ${p.date.slice(0, 4)}` : "Set a date above to enable pin selection"}</div>
     </div>
     <div class="fg">
       <label class="fl">Location / Place Name</label>
@@ -205,8 +205,8 @@ async function savePhotoMeta() {
   p.date = date;
   p.time = time;
   p.placeName = placeName;
-  const newLat = !isNaN(lat) && lat !== null ? lat : null;
-  const newLng = !isNaN(lng) && lng !== null ? lng : null;
+  const newLat = !Number.isNaN(lat) && lat !== null ? lat : null;
+  const newLng = !Number.isNaN(lng) && lng !== null ? lng : null;
   const coordsChanged = p.lat !== newLat || p.lng !== newLng;
   p.lat = newLat;
   p.lng = newLng;

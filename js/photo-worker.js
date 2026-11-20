@@ -99,7 +99,7 @@ function readExifData(view, tiffStart, end) {
     const mk = make ? make.trim() : "";
     // If model already starts with make (e.g. "Apple iPhone 15 Pro"), use model as-is
     result.camera =
-      mk && m2.toLowerCase().indexOf(mk.toLowerCase()) === 0 ? m2 : mk ? mk + " " + m2 : m2;
+      mk && m2.toLowerCase().indexOf(mk.toLowerCase()) === 0 ? m2 : mk ? `${mk} ${m2}` : m2;
   }
 
   // DateTimeOriginal is in ExifIFD
@@ -113,8 +113,8 @@ function readExifData(view, tiffStart, end) {
       if (dt) {
         const m = dt.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);
         if (m) {
-          result.date = m[1] + "-" + m[2] + "-" + m[3];
-          result.time = m[4] + ":" + m[5];
+          result.date = `${m[1]}-${m[2]}-${m[3]}`;
+          result.time = `${m[4]}:${m[5]}`;
         }
       }
     }
@@ -126,8 +126,8 @@ function readExifData(view, tiffStart, end) {
     if (dt) {
       const m = dt.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);
       if (m) {
-        result.date = m[1] + "-" + m[2] + "-" + m[3];
-        result.time = m[4] + ":" + m[5];
+        result.date = `${m[1]}-${m[2]}-${m[3]}`;
+        result.time = `${m[4]}:${m[5]}`;
       }
     }
   }

@@ -109,8 +109,8 @@ function runDemo() {
       y = mapRect.top + pt.y;
     }
     cursor.style.transition = `left ${duration}ms ease, top ${duration}ms ease, opacity .3s`;
-    cursor.style.left = x + "px";
-    cursor.style.top = y + "px";
+    cursor.style.left = `${x}px`;
+    cursor.style.top = `${y}px`;
     cursor.style.opacity = "1";
     await wait(duration + 50);
   };
@@ -206,7 +206,7 @@ function runDemo() {
           const poll = setInterval(() => {
             const lb = document.getElementById("lightbox");
             const img = document.getElementById("lb-img");
-            if (lb.classList.contains("open") && img && img.complete && img.naturalWidth) {
+            if (lb.classList.contains("open") && img?.complete && img.naturalWidth) {
               clearInterval(poll);
               res();
             }
@@ -257,7 +257,9 @@ async function runGlobeDemo() {
 
   // Replace DOM cluster markers with GPU-rendered circle dots — no jitter during rotation
   _animatingMap = true;
-  Object.values(domMarkers).forEach((m) => m.remove());
+  Object.values(domMarkers).forEach((m) => {
+    m.remove();
+  });
   domMarkers = {};
   const pinSrc = map.getSource("photo-pins");
   if (pinSrc) pinSrc.setData({ type: "FeatureCollection", features: [] });

@@ -12,7 +12,7 @@ function showProg(v) {
   if (!v) document.getElementById("progress-bar-inner").style.width = "0%";
 }
 function updProg(pct, txt) {
-  document.getElementById("progress-bar-inner").style.width = pct + "%";
+  document.getElementById("progress-bar-inner").style.width = `${pct}%`;
   document.getElementById("progress-text").textContent = txt;
 }
 function showToast(msg, type = "info") {
@@ -33,10 +33,10 @@ function fmtDate(date, time) {
   if (!date) return "";
   if (date.length === 4) return date;
   if (date.length === 7) {
-    const d = new Date(date + "-01T12:00:00");
+    const d = new Date(`${date}-01T12:00:00`);
     return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
   }
-  const d = new Date(date + "T12:00:00");
+  const d = new Date(`${date}T12:00:00`);
   const ds = d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   return time ? `${ds} ${fmtTime12(time)}` : ds;
 }
@@ -51,20 +51,20 @@ function fmtDateShort(date) {
   if (!date) return "";
   if (date.length === 4) return date;
   if (date.length === 7) {
-    const d = new Date(date + "-01T12:00:00");
+    const d = new Date(`${date}-01T12:00:00`);
     return d.toLocaleDateString("en-US", { month: "short" });
   }
-  const d = new Date(date + "T12:00:00");
+  const d = new Date(`${date}T12:00:00`);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function fmtDateLong(date) {
   if (!date) return "No date";
   if (date.length === 4) return date;
   if (date.length === 7) {
-    const d = new Date(date + "-01T12:00:00");
+    const d = new Date(`${date}-01T12:00:00`);
     return d.toLocaleDateString("en-US", { year: "numeric", month: "long" });
   }
-  const d = new Date(date + "T12:00:00");
+  const d = new Date(`${date}T12:00:00`);
   return d.toLocaleDateString("en-US", {
     weekday: "short",
     year: "numeric",
@@ -406,9 +406,9 @@ function datePickerHTML(id, value, opts = {}) {
   </div>`;
 }
 function getDatePickerValue(id) {
-  const y = v(id + "_y"),
-    m = v(id + "_m"),
-    d = v(id + "_d");
+  const y = v(`${id}_y`),
+    m = v(`${id}_m`),
+    d = v(`${id}_d`);
   if (!y) return "";
   if (!m) return y;
   if (!d) return `${y}-${m}`;
@@ -434,8 +434,8 @@ function timePickerHTML(id, value) {
   </div>`;
 }
 function getTimePickerValue(id) {
-  const h = v(id + "_h"),
-    m = v(id + "_m");
+  const h = v(`${id}_h`),
+    m = v(`${id}_m`);
   if (!h || !m) return "";
   return `${h}:${m}`;
 }

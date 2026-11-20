@@ -2,8 +2,8 @@
 // PHOTO LIST (sorted ascending by timestamp)
 // ═══════════════════════════════════════
 function photoSortKey(p) {
-  if (p.date) return p.date + "T" + (p.time || "00:00");
-  return "9999-99-99T" + String(p.addedAt).padStart(16, "0");
+  if (p.date) return `${p.date}T${p.time || "00:00"}`;
+  return `9999-99-99T${String(p.addedAt).padStart(16, "0")}`;
 }
 
 // Duration scales with content height so small groups snap and large ones
@@ -29,10 +29,10 @@ function _animateBody(hdr, body, expand) {
   if (expand) {
     body.style.maxHeight = "";
     const h = body.scrollHeight;
-    body.style.transitionDuration = _animDuration(h) + "ms";
+    body.style.transitionDuration = `${_animDuration(h)}ms`;
     body.style.maxHeight = "0";
     void body.scrollHeight;
-    body.style.maxHeight = h + "px";
+    body.style.maxHeight = `${h}px`;
     hdr.classList.remove("collapsed");
     // Clear inline overrides on completion so nested groups can grow later.
     const onEnd = () => {
@@ -45,8 +45,8 @@ function _animateBody(hdr, body, expand) {
     body.addEventListener("transitionend", onEnd);
   } else {
     const h = body.scrollHeight;
-    body.style.transitionDuration = _animDuration(h) + "ms";
-    body.style.maxHeight = h + "px";
+    body.style.transitionDuration = `${_animDuration(h)}ms`;
+    body.style.maxHeight = `${h}px`;
     void body.scrollHeight;
     requestAnimationFrame(() => {
       hdr.classList.add("collapsed");
@@ -144,12 +144,12 @@ function rebuildPhotoList() {
   sorted.forEach((p) => {
     const yr = p.date ? p.date.slice(0, 4) : null;
     if (!yr) {
-      (byDecade["Undated"] = byDecade["Undated"] || {})["Undated"] =
-        byDecade["Undated"]?.["Undated"] || [];
-      byDecade["Undated"]["Undated"].push(p);
+      byDecade.Undated = byDecade.Undated || {};
+      byDecade.Undated.Undated = byDecade.Undated.Undated || [];
+      byDecade.Undated.Undated.push(p);
       return;
     }
-    const dk = String(Math.floor(parseInt(yr) / 10) * 10);
+    const dk = String(Math.floor(parseInt(yr, 10) / 10) * 10);
     if (!byDecade[dk]) byDecade[dk] = {};
     if (!byDecade[dk][yr]) byDecade[dk][yr] = [];
     byDecade[dk][yr].push(p);
@@ -158,7 +158,7 @@ function rebuildPhotoList() {
   const decades = Object.keys(byDecade).sort((a, b) => {
     if (a === "Undated") return 1;
     if (b === "Undated") return -1;
-    return parseInt(a) < parseInt(b) ? -1 : 1;
+    return parseInt(a, 10) < parseInt(b, 10) ? -1 : 1;
   });
 
   _decadeEntries = [];
@@ -166,7 +166,7 @@ function rebuildPhotoList() {
 
   decades.forEach((dk) => {
     const isUndated = dk === "Undated";
-    const decadeLabel = isUndated ? "Undated" : `${dk} – ${parseInt(dk) + 9}`;
+    const decadeLabel = isUndated ? "Undated" : `${dk} – ${parseInt(dk, 10) + 9}`;
 
     // Total count across all years in this decade
     let totalCount = 0;
@@ -198,7 +198,9 @@ function rebuildPhotoList() {
 
       const yearBody = document.createElement("div");
       yearBody.className = "year-body";
-      byDecade[dk][yr].forEach((p) => yearBody.appendChild(_makeCard(p)));
+      byDecade[dk][yr].forEach((p) => {
+        yearBody.appendChild(_makeCard(p));
+      });
       yearGroup.appendChild(yearBody);
 
       yearHdr.addEventListener("click", () => {
@@ -275,7 +277,9 @@ function focusPhoto(id) {
 }
 
 function highlightCard(id) {
-  document.querySelectorAll(".photo-card.active").forEach((c) => c.classList.remove("active"));
+  document.querySelectorAll(".photo-card.active").forEach((c) => {
+    c.classList.remove("active");
+  });
   outer: for (const de of _decadeEntries) {
     for (const ye of de.years) {
       const card = ye.body.querySelector(`#card_${id}`);
@@ -303,7 +307,7 @@ function highlightCard(id) {
 }
 
 async function deletePhoto(id, e) {
-  e && e.stopPropagation();
+  e?.stopPropagation();
   const p = photoMap.get(id);
   if (!p) return;
   if (!confirm("Are you sure you want to delete this photo?")) return;
@@ -356,8 +360,10 @@ function buildTimeline() {
   dated.forEach((p) => {
     const [y, m] = p.date.split("-");
     const mk = `${y}-${m}`;
-    (byYear[y] = byYear[y] || {})[mk] = byYear[y][mk] || {};
-    (byYear[y][mk][p.date] = byYear[y][mk][p.date] || []).push(p);
+    byYear[y] = byYear[y] || {};
+    byYear[y][mk] = byYear[y][mk] || {};
+    byYear[y][mk][p.date] = byYear[y][mk][p.date] || [];
+    byYear[y][mk][p.date].push(p);
     yearCounts[y] = (yearCounts[y] || 0) + 1;
   });
   const frag = document.createDocumentFragment();
@@ -382,15 +388,15 @@ function buildTimeline() {
       Object.keys(byYear[yr])
         .sort()
         .forEach((mk) => {
-          const mi = parseInt(mk.split("-")[1]) - 1;
+          const mi = parseInt(mk.split("-")[1], 10) - 1;
           bodyHtml += `<div class="tl-month"><div class="tl-month-label">${MONTHS[mi]}</div>`;
           Object.keys(byYear[yr][mk])
             .sort()
             .forEach((dk) => {
-              const d = parseInt(dk.split("-")[2]);
+              const d = parseInt(dk.split("-")[2], 10);
               bodyHtml += `<div class="tl-day"><div class="tl-day-label">${d}</div><div class="tl-strip">`;
               byYear[yr][mk][dk].forEach((p) => {
-                bodyHtml += `<img class="tl-thumb" src="${p.thumbUrl}" title="${esc(p.name)}${p.time ? " · " + p.time : ""}" loading="lazy" onclick="focusTLPhoto('${p.id}')"/>`;
+                bodyHtml += `<img class="tl-thumb" src="${p.thumbUrl}" title="${esc(p.name)}${p.time ? ` · ${p.time}` : ""}" loading="lazy" onclick="focusTLPhoto('${p.id}')"/>`;
               });
               bodyHtml += `</div></div>`;
             });
