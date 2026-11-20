@@ -94,6 +94,13 @@ Find your exact hostname by running `tailscale status` on the NAS, or check the 
 
 No port forwarding needed — Tailscale uses encrypted WireGuard tunnels that punch through NAT automatically.
 
+**DSM firewall note:** if your firewall is locked down (Control Panel → Security → Firewall) with geo-restricted or LAN-only rules and a deny-all at the bottom, add one rule above the deny-all:
+
+- **Source IP:** `100.64.0.0/10` (Tailscale's address range — only devices on your tailnet can ever match it)
+- **Ports:** `443` (or your custom Tailscale Serve port, e.g. `8443`)
+
+Tailscale traffic always arrives from tailnet IPs, so a phone in another country still connects from a `100.x` address. No geo-rule changes needed — location stops mattering entirely.
+
 ## 5. Auto-start on boot
 
 The Tailscale serve config survives reboots on its own. You only need to ensure `serve.py` starts when the NAS boots.
