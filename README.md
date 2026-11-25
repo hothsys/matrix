@@ -4,7 +4,7 @@
 
 <h1 align="center">Matrix</h1>
 
-*A local-first travel photo mapping app. Runs entirely in your browser, no account needed.*
+<p align="center"><em>A local-first travel photo mapping app. Runs entirely in your browser, no account needed.</em></p>
 
 Add photos with GPS data and Matrix pins them on a map, with albums, a timeline and offline browsing. A small local Python server serves the app and keeps a backup of your data on disk.
 
