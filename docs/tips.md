@@ -1,5 +1,24 @@
 # Tips & Features
 
+## Feature overview
+
+| Feature | Detail |
+|---|---|
+| 📍 Auto-pin | GPS EXIF read, no manual coordinates needed |
+| 🔎 Destination search | Search any place or paste GPS coordinates |
+| 🖱 Right-click pin | Right-click the map to pin a location |
+| 🏳 Countries visited | Flag emojis for every country you've visited |
+| 📁 Albums | Named albums with optional date ranges |
+| 🗓 Timeline | Chronological photo browser |
+| 🖼 Lightbox | Full-size viewer with navigation and camera info |
+| 📝 Notes | Add notes to any pin |
+| 🛰 Map styles | Light, Dark, Terrain, 3D Terrain, Satellite, 3D Satellite, Globe |
+| 🔄 Clustering | Pins cluster by zoom, expand on click |
+| 💾 Auto-save | Background backup to disk via `serve.py` |
+| 📦 Export / Import | Full dataset as compressed `.json.gz` |
+| 🎬 Video export | Trip animation as WebM video (VP9) |
+| 📡 Offline mode | Browse photos and cached tiles without internet |
+
 ## Photo tips
 
 - **JPEG photos from iPhones** almost always have GPS data embedded — they'll auto-pin perfectly.
