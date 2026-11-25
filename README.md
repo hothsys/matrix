@@ -1,4 +1,8 @@
-# <img src="logo_stroke.svg" width="100" valign="middle" hspace="10" vspace="4"/>Matrix
+<p align="center">
+  <img src="logo_stroke.svg" alt="Matrix logo" width="220">
+</p>
+
+<h1 align="center">Matrix</h1>
 
 *A local-first travel photo mapping app. Runs entirely in your browser, no account needed.*
 
