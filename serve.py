@@ -32,28 +32,39 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 
-# Create an SSL context for downloading vendor files
-# (some Python installs on macOS lack default certificates)
+# Create a verified SSL context for downloading vendor files
+# (some Python installs on macOS lack default certificates).
+# Verification is never skipped: if no verified context can be built,
+# downloads fail with an error naming the cause and the fix.
 def _make_ssl_ctx():
     try:
         return ssl.create_default_context()
-    except Exception:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
+    except Exception as exc:
+        # create_default_context() itself failed, so calling it again
+        # would fail the same way. certifi ships its own CA bundle.
+        try:
+            import certifi
+        except ImportError:
+            raise RuntimeError(
+                "Could not create a verified SSL context (%s). "
+                "Install certificates with: python -m certifi, or run the "
+                "'Install Certificates.command' that ships with macOS Python installs."
+                % exc
+            ) from exc
+        try:
+            return ssl.create_default_context(cafile=certifi.where())
+        except Exception as certifi_exc:
+            raise RuntimeError(
+                "Could not create a verified SSL context with the certifi bundle (%s). "
+                "Install certificates with: python -m certifi, or run the "
+                "'Install Certificates.command' that ships with macOS Python installs."
+                % certifi_exc
+            ) from certifi_exc
 
 
 def _urlopen(url, **kwargs):
     req = kwargs.pop("req", None) or urllib.request.Request(url)
-    try:
-        return urllib.request.urlopen(req, context=_make_ssl_ctx(), **kwargs)
-    except urllib.error.URLError:
-        # Fallback: skip certificate verification
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return urllib.request.urlopen(req, context=ctx, **kwargs)
+    return urllib.request.urlopen(req, context=_make_ssl_ctx(), **kwargs)
 
 
 def _download(url, dest):
